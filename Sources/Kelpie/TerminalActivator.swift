@@ -17,21 +17,37 @@ import Darwin
 /// unreachable.
 enum TerminalActivator {
 
+    /// The walk inspects every process on the machine, so it runs off the main
+    /// actor — it is reached from every jump and every notification activation,
+    /// and stalling the main actor there would stutter the whole UI. Only
+    /// `NSRunningApplication.activate` needs to be back on the main actor.
     @MainActor
-    static func activateHerdrHost() {
-        for pid in herdrClientPIDs() {
-            guard let appPID = appAncestor(of: pid),
-                  let app = NSRunningApplication(processIdentifier: appPID) else { continue }
-            app.activate(options: [.activateAllWindows])
+    static func activateHerdrHost() async {
+        let hostPID = await Task.detached(priority: .userInitiated) { hostApplicationPID() }.value
+        guard let hostPID, let app = NSRunningApplication(processIdentifier: hostPID) else {
+            // No attached client: focusing herdr was still worth doing, and the
+            // right pane will be selected the next time it is opened.
             return
         }
-        // No attached client: focusing herdr was still worth doing, and the
-        // right pane will be selected the next time it is opened.
+        app.activate(options: [.activateAllWindows])
+    }
+
+    /// The first herdr client whose ancestor chain reaches an `.app` bundle.
+    static func hostApplicationPID() -> pid_t? {
+        for pid in herdrClientPIDs() {
+            if let appPID = appAncestor(of: pid) { return appPID }
+        }
+        return nil
     }
 
     static func herdrClientPIDs() -> [pid_t] {
-        allPIDs().filter { pid in
-            guard let arguments = processArguments(pid), let first = arguments.first else { return false }
+        // One reader for the whole walk. It used to re-read KERN_ARGMAX and
+        // allocate a fresh buffer of that size for every process on the
+        // machine — 1 MB each on macOS, so several hundred megabytes of churn
+        // per click, on the main actor.
+        guard var reader = ProcessArgumentsReader() else { return [] }
+        return allPIDs().filter { pid in
+            guard let arguments = reader.arguments(of: pid), let first = arguments.first else { return false }
             guard (first as NSString).lastPathComponent == "herdr" else { return false }
             // The server runs as `herdr server`; only bare `herdr` is a client.
             return !arguments.dropFirst().contains("server")
@@ -88,39 +104,53 @@ enum TerminalActivator {
         return String(decoding: buffer[0..<Int(length)].map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
-    /// Reads argv from the kernel's process arguments area.
-    private static func processArguments(_ pid: pid_t) -> [String]? {
-        var argMax: Int32 = 0
-        var size = MemoryLayout<Int32>.size
-        var mib: [Int32] = [CTL_KERN, KERN_ARGMAX]
-        guard sysctl(&mib, 2, &argMax, &size, nil, 0) == 0 else { return nil }
+    /// Reads argv from the kernel's process arguments area, reusing a single
+    /// `KERN_ARGMAX`-sized buffer across every process it is asked about.
+    /// `KERN_ARGMAX` is a boot-time constant, so reading it once is enough.
+    private struct ProcessArgumentsReader {
+        private let capacity: Int
+        private var buffer: [CChar]
 
-        var buffer = [CChar](repeating: 0, count: Int(argMax))
-        var bufferSize = Int(argMax)
-        var argMib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
-        guard sysctl(&argMib, 3, &buffer, &bufferSize, nil, 0) == 0, bufferSize > MemoryLayout<Int32>.size else {
-            return nil
+        init?() {
+            var argMax: Int32 = 0
+            var size = MemoryLayout<Int32>.size
+            var mib: [Int32] = [CTL_KERN, KERN_ARGMAX]
+            guard sysctl(&mib, 2, &argMax, &size, nil, 0) == 0, argMax > 0 else { return nil }
+            capacity = Int(argMax)
+            buffer = [CChar](repeating: 0, count: capacity)
         }
 
-        var argc: Int32 = 0
-        memcpy(&argc, buffer, MemoryLayout<Int32>.size)
-        var cursor = MemoryLayout<Int32>.size
-
-        // Skip the executable path, then its NUL padding.
-        while cursor < bufferSize, buffer[cursor] != 0 { cursor += 1 }
-        while cursor < bufferSize, buffer[cursor] == 0 { cursor += 1 }
-
-        var arguments: [String] = []
-        var chunk: [UInt8] = []
-        while cursor < bufferSize, arguments.count < Int(argc) {
-            if buffer[cursor] == 0 {
-                arguments.append(String(decoding: chunk, as: UTF8.self))
-                chunk = []
-            } else {
-                chunk.append(UInt8(bitPattern: buffer[cursor]))
+        /// Stale bytes from the previous process are harmless: `sysctl` writes
+        /// the real length back into `bufferSize`, and parsing never reads past
+        /// it.
+        mutating func arguments(of pid: pid_t) -> [String]? {
+            var bufferSize = capacity
+            var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+            guard sysctl(&mib, 3, &buffer, &bufferSize, nil, 0) == 0,
+                  bufferSize > MemoryLayout<Int32>.size else {
+                return nil
             }
-            cursor += 1
+
+            var argc: Int32 = 0
+            memcpy(&argc, buffer, MemoryLayout<Int32>.size)
+            var cursor = MemoryLayout<Int32>.size
+
+            // Skip the executable path, then its NUL padding.
+            while cursor < bufferSize, buffer[cursor] != 0 { cursor += 1 }
+            while cursor < bufferSize, buffer[cursor] == 0 { cursor += 1 }
+
+            var arguments: [String] = []
+            var chunk: [UInt8] = []
+            while cursor < bufferSize, arguments.count < Int(argc) {
+                if buffer[cursor] == 0 {
+                    arguments.append(String(decoding: chunk, as: UTF8.self))
+                    chunk = []
+                } else {
+                    chunk.append(UInt8(bitPattern: buffer[cursor]))
+                }
+                cursor += 1
+            }
+            return arguments
         }
-        return arguments
     }
 }
