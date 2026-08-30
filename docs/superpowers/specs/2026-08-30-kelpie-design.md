@@ -184,7 +184,10 @@ The status item renders an `NSAttributedString` of up to three segments —
 `◉n` in red for blocked, `⣾n` in yellow for working, `✓n` in green for done —
 omitting any segment whose count is zero. Idle agents are not counted in the menu
 bar; they appear in the popover. When every agent is idle the item shows a single
-muted grey glyph, so Kelpie does not compete for attention at rest.
+grey glyph, so Kelpie does not compete for attention at rest — but it has to stay
+legible. Rendered at `tertiaryLabelColor` it proved to be past restraint and into
+invisibility against a busy menu bar, with no way to tell Kelpie was running at
+all, so the resting glyph uses `secondaryLabelColor`.
 
 Two measures keep the menu bar from shifting:
 
