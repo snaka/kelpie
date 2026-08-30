@@ -67,4 +67,28 @@ struct AgentGroupingTests {
     func emptyState() {
         #expect(AgentGrouping.groups(state: SessionState()).isEmpty)
     }
+
+    private func stateWithTiebreakerTest() -> SessionState {
+        var s = SessionState()
+        _ = s.replace(with: Snapshot(
+            agents: [
+                AgentRecord(paneID: "w0:p3", workspaceID: "w0", revision: 1, status: .working,
+                            title: "Third pane", agentKind: "claude"),
+                AgentRecord(paneID: "w0:p1", workspaceID: "w0", revision: 1, status: .working,
+                            title: "First pane", agentKind: "claude"),
+            ],
+            workspaces: [
+                WorkspaceRecord(workspaceID: "w0", label: "workspace"),
+            ],
+            protocolVersion: 20
+        ))
+        return s
+    }
+
+    @Test("Rows within a workspace are sorted by pane ID for stable ordering")
+    func paneIDTiebreaker() {
+        let groups = AgentGrouping.groups(state: stateWithTiebreakerTest())
+        let working = groups.first { $0.status == .working }
+        #expect(working?.rows.map(\.paneID) == ["w0:p1", "w0:p3"])
+    }
 }
