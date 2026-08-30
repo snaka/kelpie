@@ -1,0 +1,31 @@
+name: Test
+
+on:
+  # Branches only: a tag push is a release, and release.yml already builds and
+  # signs the whole app for it.
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      # KelpieCore and KelpieClient only: the app target needs XcodeGen and a
+      # signing-free xcodebuild run, and every behavioural rule Kelpie depends
+      # on is deliberately testable without it.
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
