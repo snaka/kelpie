@@ -73,6 +73,15 @@ public actor UnixSocketTransport: Transport {
 
     public nonisolated func chunks() -> AsyncThrowingStream<Data, any Error> {
         AsyncThrowingStream { continuation in
+            // An abandoned stream must take the socket down with it. Between
+            // chunks() and the point where a connection is handed to its owner
+            // there are throwing steps — the subscribe handshake is one — and
+            // if the stream is simply dropped there, nothing else holds a
+            // reference to this transport: the descriptor stays open and the
+            // read queue stays parked in a blocking read() forever.
+            continuation.onTermination = { _ in
+                Task { await self.close() }
+            }
             Task {
                 let fd = await self.currentDescriptor
                 guard fd >= 0 else {
@@ -122,7 +131,11 @@ public actor UnixSocketTransport: Transport {
         // Safety net for an instance dropped without close() — for example a
         // reconnect that replaces the transport on an error path. Actor deinit
         // is nonisolated but no concurrent access is possible at this point.
+        // shutdown() first for the same reason close() does it: a reader parked
+        // in a blocking read() is not reliably woken by close() alone, and a
+        // deinit is exactly the case where nobody is left to notice.
         if descriptor >= 0 {
+            shutdown(descriptor, SHUT_RDWR)
             Darwin.close(descriptor)
         }
     }

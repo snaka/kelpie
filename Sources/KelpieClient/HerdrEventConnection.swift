@@ -40,6 +40,21 @@ public actor HerdrEventConnection {
     /// handshake result is delivered through a continuation that the same
     /// reader resumes.
     public func subscribe() async throws -> AsyncStream<LiveEvent> {
+        do {
+            return try await performSubscribe()
+        } catch {
+            // Every throwing step below `connect()` leaves an open descriptor
+            // and a reader parked in a blocking read(). The coordinator adopts
+            // this connection only once `subscribe()` has returned, so on a
+            // throw nothing else holds a reference that could close it — and a
+            // subscription herdr keeps rejecting is retried forever on a
+            // backoff, leaking one descriptor and one thread per cycle.
+            await close()
+            throw error
+        }
+    }
+
+    private func performSubscribe() async throws -> AsyncStream<LiveEvent> {
         try await transport.connect()
         let chunks = transport.chunks()
         try await transport.send(

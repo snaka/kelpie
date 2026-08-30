@@ -78,6 +78,39 @@ struct HerdrEventConnectionTests {
         }
     }
 
+    @Test("A rejected subscription closes the transport instead of leaking it")
+    func rejectedSubscriptionClosesTransport() async {
+        let transport = FakeTransport(scriptedChunks: [
+            line(#"{"id":"kelpie-sub","error":{"code":"invalid_request","message":"missing field pane_id"}}"#)
+        ])
+        let connection = HerdrEventConnection(transport: transport)
+
+        do {
+            _ = try await connection.subscribe()
+            Issue.record("expected the rejected subscription to throw")
+        } catch {
+            // Expected; what matters is what happened to the socket.
+        }
+        // The caller never sees this connection, so if subscribe() does not
+        // close it here nothing ever will.
+        #expect(transport.closed)
+    }
+
+    @Test("A subscribe that fails before the handshake still closes the transport")
+    func failedSendClosesTransport() async {
+        let transport = FakeTransport()
+        transport.finish()      // the peer is already gone, so the write fails
+        let connection = HerdrEventConnection(transport: transport)
+
+        do {
+            _ = try await connection.subscribe()
+            Issue.record("expected subscribe() to throw when the write fails")
+        } catch {
+            // Expected.
+        }
+        #expect(transport.closed)
+    }
+
     @Test("A malformed event line does not tear down the stream")
     func malformedLineTolerated() async throws {
         let transport = FakeTransport(scriptedChunks: [line(ack)])
