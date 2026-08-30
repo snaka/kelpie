@@ -10,8 +10,9 @@ public struct SessionState: Equatable, Sendable {
 
     public init() {}
 
-    /// Installs a snapshot wholesale, replacing everything. Used for the
-    /// initial bootstrap and for the periodic resync.
+    /// Installs a snapshot wholesale, replacing everything. This is the only
+    /// way state changes: an event means something changed, and only a fresh
+    /// snapshot says what it changed to. See `AppCoordinator.refreshFromSnapshot`.
     public mutating func replace(with snapshot: Snapshot) -> [StateTransition] {
         let previous = agents
         agents = Dictionary(uniqueKeysWithValues: snapshot.agents.map { ($0.paneID, $0) })
@@ -20,32 +21,6 @@ public struct SessionState: Equatable, Sendable {
         )
         return snapshot.agents.compactMap { record in
             transition(from: previous[record.paneID], to: record)
-        }
-    }
-
-    public mutating func apply(_ event: LiveEvent) -> [StateTransition] {
-        switch event {
-        case .paneUpserted(let record):
-            // herdr replays historical events when a subscription opens, so a
-            // revision that has not advanced carries nothing new.
-            if let existing = agents[record.paneID], existing.revision >= record.revision {
-                return []
-            }
-            let previous = agents[record.paneID]
-            agents[record.paneID] = record
-            return [transition(from: previous, to: record)].compactMap { $0 }
-
-        case .paneClosed(let paneID):
-            agents[paneID] = nil
-            return []
-
-        case .workspaceUpserted(let workspace):
-            workspaceLabels[workspace.workspaceID] = workspace.label
-            return []
-
-        case .workspaceClosed(let workspaceID):
-            workspaceLabels[workspaceID] = nil
-            return []
         }
     }
 

@@ -25,11 +25,6 @@ struct NotificationPolicyTests {
         #expect(NotificationPolicy.notifiable([transition(from: nil, to: .blocked)], phase: .bootstrap).isEmpty)
     }
 
-    @Test("Resync never notifies, so reconnecting is silent")
-    func resyncSilent() {
-        #expect(NotificationPolicy.notifiable([transition(from: .working, to: .blocked)], phase: .resync).isEmpty)
-    }
-
     @Test("Transitions to other states are not notifiable")
     func otherStates() {
         let transitions = [

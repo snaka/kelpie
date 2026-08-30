@@ -42,70 +42,35 @@ struct SessionStateTests {
         #expect(transitions.isEmpty)
     }
 
-    @Test("A newer revision updates the pane and reports the transition")
-    func newerRevisionApplies() {
-        var state = SessionState()
-        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .working, revision: 3)],
-                                         workspaces: [], protocolVersion: 20))
-        let transitions = state.apply(.paneUpserted(agent("w0:p1", .blocked, revision: 4)))
-        #expect(state.agents["w0:p1"]?.status == .blocked)
-        #expect(transitions == [StateTransition(
-            paneID: "w0:p1", workspaceID: "w0", from: .working, to: .blocked, title: "t"
-        )])
-    }
-
-    @Test("A replayed lower revision is discarded")
-    func staleRevisionDiscarded() {
-        var state = SessionState()
-        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .blocked, revision: 4)],
-                                         workspaces: [], protocolVersion: 20))
-        let transitions = state.apply(.paneUpserted(agent("w0:p1", .unknown, revision: 0)))
-        #expect(state.agents["w0:p1"]?.status == .blocked)
-        #expect(transitions.isEmpty)
-    }
-
-    @Test("A repeated identical revision is discarded")
-    func equalRevisionDiscarded() {
-        var state = SessionState()
-        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .working, revision: 4)],
-                                         workspaces: [], protocolVersion: 20))
-        #expect(state.apply(.paneUpserted(agent("w0:p1", .blocked, revision: 4))).isEmpty)
-        #expect(state.agents["w0:p1"]?.status == .working)
-    }
-
-    @Test("A newer revision with an unchanged status reports no transition")
-    func unchangedStatusIsNotATransition() {
-        var state = SessionState()
-        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .working, revision: 3)],
-                                         workspaces: [], protocolVersion: 20))
-        let transitions = state.apply(.paneUpserted(agent("w0:p1", .working, revision: 4, title: "new")))
-        #expect(transitions.isEmpty)
-        #expect(state.agents["w0:p1"]?.title == "new")
-    }
-
-    @Test("Closing a pane removes it and reports no transition")
-    func paneClosedRemoves() {
-        var state = SessionState()
-        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .working, revision: 1)],
-                                         workspaces: [], protocolVersion: 20))
-        #expect(state.apply(.paneClosed(paneID: "w0:p1")).isEmpty)
-        #expect(state.agents["w0:p1"] == nil)
-    }
-
-    @Test("Workspace upsert and close maintain the label map")
-    func workspaceLabels() {
-        var state = SessionState()
-        _ = state.apply(.workspaceUpserted(WorkspaceRecord(workspaceID: "w0", label: "old")))
-        _ = state.apply(.workspaceUpserted(WorkspaceRecord(workspaceID: "w0", label: "new")))
-        #expect(state.label(for: "w0") == "new")
-        _ = state.apply(.workspaceClosed(workspaceID: "w0"))
-        #expect(state.label(for: "w0") == "w0")
-    }
-
     @Test("An unknown workspace falls back to its id")
     func labelFallback() {
         let state = SessionState()
         #expect(state.label(for: "w9") == "w9")
+    }
+
+    @Test("Replacing with a snapshot reports a status change as a transition")
+    func replaceReportsStatusChange() {
+        var state = SessionState()
+        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .done, revision: 7)],
+                                         workspaces: [], protocolVersion: 20))
+        // Same revision, different status — exactly the shape herdr emits when a
+        // done mark clears without the terminal title changing.
+        let transitions = state.replace(with: Snapshot(
+            agents: [agent("w0:p1", .idle, revision: 7)], workspaces: [], protocolVersion: 20
+        ))
+        #expect(transitions == [StateTransition(
+            paneID: "w0:p1", workspaceID: "w0", from: .done, to: .idle, title: "t"
+        )])
+        #expect(state.agents["w0:p1"]?.status == .idle)
+    }
+
+    @Test("Replacing with an unchanged snapshot reports nothing")
+    func replaceReportsNothingWhenUnchanged() {
+        var state = SessionState()
+        let snapshot = Snapshot(agents: [agent("w0:p1", .working, revision: 3)],
+                                workspaces: [], protocolVersion: 20)
+        _ = state.replace(with: snapshot)
+        #expect(state.replace(with: snapshot).isEmpty)
     }
 
     @Test("Panes with no detected agent are excluded from agentPanes")
