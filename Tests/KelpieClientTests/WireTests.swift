@@ -48,6 +48,46 @@ struct WireTests {
         #expect(pong.protocolVersion == 20)
     }
 
+    @Test("A null result is still an answer, not an unreadable line")
+    func decodeNullResult() throws {
+        let line = Data(#"{"id":"f1","result":null}"#.utf8)
+        guard case .result(let id, let payload) = try Wire.decode(line: line) else {
+            Issue.record("expected a result"); return
+        }
+        #expect(id == "f1")
+        #expect(String(data: payload, encoding: .utf8) == "null")
+    }
+
+    @Test("A scalar result decodes instead of being dropped")
+    func decodeScalarResult() throws {
+        for (json, expected) in [("true", "true"), ("42", "42"), (#""ok""#, #""ok""#)] {
+            let line = Data(#"{"id":"s1","result":\#(json)}"#.utf8)
+            guard case .result(_, let payload) = try Wire.decode(line: line) else {
+                Issue.record("expected a result for \(json)"); return
+            }
+            #expect(String(data: payload, encoding: .utf8) == expected)
+        }
+    }
+
+    @Test("A request whose result is null still completes")
+    func nullResultResolvesTheRequest() async throws {
+        // agent.focus is the real case: herdr answers it with an
+        // acknowledgement, and a null there must not leave the call waiting for
+        // a socket close that may be minutes away.
+        let transport = FakeTransport()
+        let connection = HerdrRequestConnection(transport: transport)
+        try await connection.open()
+
+        async let focusing: Void = connection.focus(paneID: "w0:p1")
+        try await Task.sleep(for: .milliseconds(20))
+        let sent = try JSONSerialization.jsonObject(
+            with: Data(transport.sentLines[0].dropLast())
+        ) as! [String: Any]
+        transport.feed(Data((#"{"id":"\#(sent["id"] as! String)","result":null}"# + "\n").utf8))
+
+        try await focusing
+    }
+
     @Test("An error response decodes to a failure with its code and message")
     func decodeFailure() throws {
         let line = Data(#"{"id":"sub1","error":{"code":"invalid_request","message":"missing field pane_id"}}"#.utf8)
