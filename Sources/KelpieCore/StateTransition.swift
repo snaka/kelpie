@@ -1,12 +1,15 @@
 import Foundation
 
 /// Where a state change came from. Notifications are only ever posted for
-/// `.live`; bootstrap and resync would otherwise fire every currently blocked
-/// agent at once, every time Kelpie or herdr restarts.
+/// `.live`. `.bootstrap` describes state that already existed — it is the
+/// first snapshot after connecting, so notifying for it would fire every
+/// currently blocked agent at once every time Kelpie launches. Everything
+/// after it is `.live`, because state is always current: a diff is only
+/// non-empty when something genuinely changed, so a periodic or
+/// event-triggered refresh is exactly as notifiable as any other change.
 public enum ApplyPhase: Sendable, Equatable {
     case bootstrap
     case live
-    case resync
 }
 
 /// One pane's status changing. `from` is `nil` when the pane is newly seen.

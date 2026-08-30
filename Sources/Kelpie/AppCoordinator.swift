@@ -14,10 +14,12 @@ final class AppCoordinator {
     private var animationTimer: Timer?
     private var connectionTask: Task<Void, Never>?
     private var resyncTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
     private var events: HerdrEventConnection?
     private var eventStream: AsyncStream<LiveEvent>?
 
     private static let resyncInterval: Duration = .seconds(300)
+    private static let eventDebounce: Duration = .milliseconds(150)
     private static let animationInterval: TimeInterval = 0.1
     private static let knownProtocol = 20
 
@@ -110,20 +112,38 @@ final class AppCoordinator {
         startResyncLoop()
     }
 
+    /// Events say *that* something changed; the snapshot says *what to*. herdr's
+    /// `revision` counts stripped-title changes, not state changes, so an event
+    /// payload cannot be ordered against what we already hold — and subscribing
+    /// replays history that does not converge to the current state. Re-reading
+    /// the snapshot sidesteps both.
     private func pumpEvents() async {
         guard let stream = eventStream else { return }
-        for await event in stream {
-            let transitions = state.apply(event)
-            let notifiable = NotificationPolicy.notifiable(transitions, phase: .live)
-            for transition in notifiable {
-                NotificationManager.shared.postBlocked(
-                    workspace: state.label(for: transition.workspaceID),
-                    title: transition.title,
-                    paneID: transition.paneID
-                )
-            }
-            refreshUI()
+        for await _ in stream {
+            scheduleRefresh()
         }
+    }
+
+    private func scheduleRefresh() {
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.eventDebounce)
+            guard !Task.isCancelled, let self else { return }
+            await self.refreshFromSnapshot()
+        }
+    }
+
+    private func refreshFromSnapshot() async {
+        guard let snapshot = try? await request({ try await $0.snapshot() }) else { return }
+        let transitions = state.replace(with: snapshot)
+        for transition in NotificationPolicy.notifiable(transitions, phase: .live) {
+            NotificationManager.shared.postBlocked(
+                workspace: state.label(for: transition.workspaceID),
+                title: transition.title,
+                paneID: transition.paneID
+            )
+        }
+        refreshUI()
     }
 
     /// A Task created inside a `@MainActor` type inherits that isolation, so
@@ -134,19 +154,18 @@ final class AppCoordinator {
             while !Task.isCancelled {
                 try? await Task.sleep(for: Self.resyncInterval)
                 guard let self else { return }
-                guard let snapshot = try? await self.request({ try await $0.snapshot() })
-                else { continue }
-                // Resync transitions are deliberately discarded: they describe
-                // state that already existed, and notifying for them would fire
-                // every blocked agent again every five minutes.
-                _ = self.state.replace(with: snapshot)
-                self.refreshUI()
+                // A snapshot this far from bootstrap is `.live`: state is
+                // always current, so a diff here is only non-empty when
+                // something genuinely changed, and it deserves the same
+                // notification any other live change would get.
+                await self.refreshFromSnapshot()
             }
         }
     }
 
     private func teardown() async {
         resyncTask?.cancel(); resyncTask = nil
+        refreshTask?.cancel(); refreshTask = nil
         eventStream = nil
         await events?.close(); events = nil
         state = SessionState()
