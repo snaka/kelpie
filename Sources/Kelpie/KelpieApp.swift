@@ -14,11 +14,11 @@ struct KelpieApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var menuBar: MenuBarController?
+    private var coordinator: AppCoordinator?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let controller = MenuBarController()
-        controller.install()
-        menuBar = controller
+        let coordinator = AppCoordinator()
+        coordinator.start()
+        self.coordinator = coordinator
     }
 }
