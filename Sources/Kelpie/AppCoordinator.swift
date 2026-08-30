@@ -214,15 +214,19 @@ final class AppCoordinator {
         let wanted = MenuBarModel.needsAnimation(counts)
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if wanted, animationTimer == nil {
-            animationTimer = Timer.scheduledTimer(
-                withTimeInterval: Self.animationInterval, repeats: true
-            ) { [weak self] _ in
+            let timer = Timer(timeInterval: Self.animationInterval, repeats: true) { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
                     self.tick &+= 1
                     self.renderMenuBar(counts: StatusCounts(state: self.state))
                 }
             }
+            // `.common`, not the default mode: a timer scheduled in the default
+            // mode alone stops firing while the run loop is in event tracking,
+            // which is precisely when the popover or a menu is open — the
+            // spinner would freeze exactly while the user is looking at it.
+            RunLoop.main.add(timer, forMode: .common)
+            animationTimer = timer
         } else if !wanted {
             animationTimer?.invalidate()
             animationTimer = nil
