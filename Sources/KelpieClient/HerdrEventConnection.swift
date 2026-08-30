@@ -50,7 +50,8 @@ public actor HerdrEventConnection {
     }
 
     /// Connects, subscribes, waits for the acknowledgement, and then returns a
-    /// stream of the events Kelpie models.
+    /// stream of change signals — one per herdr event Kelpie reacts to. The
+    /// event payloads are never read; see `LiveEvent`.
     ///
     /// One task owns the byte iterator for the whole lifetime of the
     /// connection. Handing an iterator between the handshake and a second
