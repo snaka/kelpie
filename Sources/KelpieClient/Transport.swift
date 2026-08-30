@@ -13,6 +13,10 @@ public protocol Transport: Sendable {
     func connect() async throws
     func send(_ data: Data) async throws
     /// Finishes when the peer closes the connection.
+    ///
+    /// Assumes a single reader: calling this more than once on the same
+    /// transport would start two concurrent reads on one underlying
+    /// descriptor.
     func chunks() -> AsyncThrowingStream<Data, any Error>
     func close() async
 }
