@@ -103,13 +103,30 @@ final class AppCoordinator {
         eventStream = stream
 
         let snapshot = try await request { try await $0.snapshot() }
-        _ = state.replace(with: snapshot)
 
         model.connection = pong.protocolVersion == Self.knownProtocol
             ? .connected
             : .protocolMismatch(pong.protocolVersion)
-        refreshUI()
+        // The first snapshot of a connection describes state that already
+        // existed, so it is `.bootstrap` and must not notify. This is the only
+        // place that phase is produced; everything after it is `.live`.
+        applySnapshot(snapshot, phase: .bootstrap)
         startResyncLoop()
+    }
+
+    /// The single path from a snapshot to what the user sees. Both callers go
+    /// through it so the phase is a real argument rather than something the
+    /// call site could quietly get wrong.
+    private func applySnapshot(_ snapshot: Snapshot, phase: ApplyPhase) {
+        let transitions = state.replace(with: snapshot)
+        for transition in NotificationPolicy.notifiable(transitions, phase: phase) {
+            NotificationManager.shared.postBlocked(
+                workspace: state.label(for: transition.workspaceID),
+                title: transition.title,
+                paneID: transition.paneID
+            )
+        }
+        refreshUI()
     }
 
     /// Events say *that* something changed; the snapshot says *what to*. herdr's
@@ -143,16 +160,8 @@ final class AppCoordinator {
 
     private func refreshFromSnapshot() async {
         guard let snapshot = try? await request({ try await $0.snapshot() }) else { return }
-        let transitions = state.replace(with: snapshot)
-        for transition in NotificationPolicy.notifiable(transitions, phase: .live) {
-            NotificationManager.shared.postBlocked(
-                workspace: state.label(for: transition.workspaceID),
-                title: transition.title,
-                paneID: transition.paneID
-            )
-        }
+        applySnapshot(snapshot, phase: .live)
         coalescer.didRefresh()
-        refreshUI()
     }
 
     /// A Task created inside a `@MainActor` type inherits that isolation, so
