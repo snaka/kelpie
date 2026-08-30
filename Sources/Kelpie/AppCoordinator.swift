@@ -70,7 +70,11 @@ final class AppCoordinator {
     /// socket fails with EPIPE. Every request therefore gets its own
     /// short-lived connection. The event subscription is the opposite: that
     /// connection stays open and streams.
-    private func request<T>(_ body: (HerdrRequestConnection) async throws -> T) async throws -> T {
+    ///
+    /// `T: Sendable` is required by Swift 6.1 (CI's Xcode 16.4), where the
+    /// nonisolated `body` call would otherwise send a non-Sendable result
+    /// back into this actor; Swift 6.2 no longer flags it.
+    private func request<T: Sendable>(_ body: (HerdrRequestConnection) async throws -> T) async throws -> T {
         let connection = HerdrRequestConnection(
             transport: UnixSocketTransport(path: UnixSocketTransport.defaultHerdrSocketPath)
         )
