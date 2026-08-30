@@ -165,6 +165,41 @@ struct HerdrRequestConnectionTests {
         }
     }
 
+    @Test("A connected but silent herdr expires the request instead of hanging forever")
+    func requestTimesOut() async throws {
+        // A transport that connects, accepts the write and then answers
+        // nothing: exactly the shape of a wedged herdr, which the socket layer
+        // alone cannot distinguish from one that is merely slow.
+        let transport = FakeTransport()
+        let connection = HerdrRequestConnection(transport: transport, timeout: .milliseconds(50))
+        try await connection.open()
+
+        do {
+            _ = try await connection.snapshot()
+            Issue.record("expected snapshot() to time out")
+        } catch let error as RequestError {
+            #expect(error == .timedOut)
+        }
+        // Expiring has to take the socket down too, or the app accumulates one
+        // open descriptor per refresh signal.
+        #expect(transport.closed)
+    }
+
+    @Test("A request that answers in time is unaffected by the timeout")
+    func answerBeatsTimeout() async throws {
+        let transport = FakeTransport()
+        let connection = HerdrRequestConnection(transport: transport, timeout: .seconds(30))
+        try await connection.open()
+
+        async let pong = connection.ping()
+        try await Task.sleep(for: .milliseconds(20))
+        let id = try requestObject(transport.sentLines[0])["id"] as! String
+        transport.feed(line(#"{"id":"\#(id)","result":{"type":"pong","version":"0.8.2","protocol":20}}"#))
+
+        #expect(try await pong.protocolVersion == 20)
+        #expect(!transport.closed)
+    }
+
     @Test("A call made after close() fails immediately instead of hanging")
     func callAfterClose() async throws {
         let transport = FakeTransport()

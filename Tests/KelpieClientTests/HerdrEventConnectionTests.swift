@@ -111,6 +111,34 @@ struct HerdrEventConnectionTests {
         #expect(transport.closed)
     }
 
+    @Test("A subscription herdr never acknowledges expires instead of hanging forever")
+    func handshakeTimesOut() async {
+        // The transport connects and accepts the subscribe, then goes quiet.
+        // Without a bound this is the one failure Kelpie cannot recover from:
+        // connectOnce() never returns, so the reconnect backoff is never
+        // reached and the footer reads "Connecting to herdr…" for good.
+        let transport = FakeTransport()
+        let connection = HerdrEventConnection(transport: transport, handshakeTimeout: .milliseconds(50))
+
+        do {
+            _ = try await connection.subscribe()
+            Issue.record("expected the handshake to time out")
+        } catch let error as EventConnectionError {
+            #expect(error == .handshakeTimedOut)
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+        #expect(transport.closed)
+    }
+
+    @Test("An acknowledged subscription is unaffected by the handshake timeout")
+    func acknowledgementBeatsTimeout() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport, handshakeTimeout: .seconds(30))
+        _ = try await connection.subscribe()
+        #expect(!transport.closed)
+    }
+
     @Test("A malformed event line does not tear down the stream")
     func malformedLineTolerated() async throws {
         let transport = FakeTransport(scriptedChunks: [line(ack)])
