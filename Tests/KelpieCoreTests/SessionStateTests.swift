@@ -73,6 +73,23 @@ struct SessionStateTests {
         #expect(state.replace(with: snapshot).isEmpty)
     }
 
+    @Test("Panes with no detected agent produce no transitions")
+    func nonAgentPanesProduceNoTransitions() {
+        var state = SessionState()
+        _ = state.replace(with: Snapshot(
+            agents: [agent("w0:p2", .idle, title: nil, kind: nil)],
+            workspaces: [], protocolVersion: 20
+        ))
+        // A plain shell reporting `blocked` is invisible in the counts and in
+        // the popover, so a transition for it could only ever produce a
+        // notification pointing at a row the user cannot see.
+        let transitions = state.replace(with: Snapshot(
+            agents: [agent("w0:p2", .blocked, title: nil, kind: nil)],
+            workspaces: [], protocolVersion: 20
+        ))
+        #expect(transitions.isEmpty)
+    }
+
     @Test("Panes with no detected agent are excluded from agentPanes")
     func nonAgentPanesExcluded() {
         var state = SessionState()

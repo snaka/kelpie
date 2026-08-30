@@ -31,6 +31,10 @@ public struct StatusCounts: Equatable, Sendable {
     }
 
     /// Nothing wants attention, so the menu bar shows a single muted glyph.
+    ///
+    /// This, with `MenuBarModel.segments`, is where "which statuses reach the
+    /// menu bar" is decided: blocked, working and done. Idle and unknown agents
+    /// are tallied above and listed in the popover, but never shown up there.
     public var isResting: Bool {
         blocked == 0 && working == 0 && done == 0
     }
