@@ -1,0 +1,215 @@
+import Testing
+import Foundation
+@testable import KelpieClient
+@testable import KelpieCore
+
+@Suite("HerdrEventConnection")
+struct HerdrEventConnectionTests {
+
+    private func line(_ text: String) -> Data { Data((text + "\n").utf8) }
+
+    private let ack = #"{"id":"kelpie-sub","result":{"type":"subscription_started"}}"#
+
+    private let updated = #"""
+    {"data":{"pane":{"agent":"claude","agent_status":"blocked","pane_id":"w0:p1","revision":9,"tab_id":"w0:t1","terminal_id":"t","terminal_title_stripped":"待ち","workspace_id":"w0"},"type":"pane_updated"},"event":"pane_updated"}
+    """#
+
+    @Test("Subscribe sends events.subscribe with the documented type list")
+    func subscribeRequest() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        _ = try await connection.subscribe()
+
+        let sent = try JSONSerialization.jsonObject(
+            with: Data(transport.sentLines[0].dropLast())
+        ) as! [String: Any]
+        #expect(sent["method"] as? String == "events.subscribe")
+        let subs = (sent["params"] as! [String: Any])["subscriptions"] as! [[String: Any]]
+        #expect(subs.map { $0["type"] as! String } == HerdrEventConnection.subscriptionTypes)
+    }
+
+    @Test("A pane event becomes a change signal after the acknowledgement")
+    func streamsEvents() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        let stream = try await connection.subscribe()
+
+        transport.feed(line(updated))
+        var iterator = stream.makeAsyncIterator()
+        let event = await iterator.next()
+
+        #expect(event == .paneChanged)
+    }
+
+    @Test("Uninteresting events are filtered out rather than delivered")
+    func filtersUninteresting() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        let stream = try await connection.subscribe()
+
+        transport.feed(line(#"{"data":{"type":"workspace_focused","workspace_id":"w0"},"event":"workspace_focused"}"#))
+        transport.feed(line(updated))
+
+        var iterator = stream.makeAsyncIterator()
+        // The focus event was dropped, so the first delivered signal is the
+        // one the pane update produced.
+        #expect(await iterator.next() == .paneChanged)
+    }
+
+    @Test("An event whose payload Kelpie cannot decode still signals a change")
+    func unparseablePayloadStillSignals() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        let stream = try await connection.subscribe()
+
+        // A pane payload with every field renamed: this is what a herdr wire
+        // change looks like from here. The signal must survive it, because the
+        // caller answers with a fresh snapshot and never reads the payload —
+        // dropping it would silently degrade Kelpie to five-minute polling.
+        transport.feed(line(#"{"data":{"pane":{"id":"w0:p1","state":"blocked"},"type":"pane_updated"},"event":"pane_updated"}"#))
+
+        var iterator = stream.makeAsyncIterator()
+        #expect(await iterator.next() == .paneChanged)
+    }
+
+    @Test("An event with no payload at all still signals a change")
+    func payloadlessEventStillSignals() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        let stream = try await connection.subscribe()
+
+        transport.feed(line(#"{"event":"workspace_closed"}"#))
+
+        var iterator = stream.makeAsyncIterator()
+        #expect(await iterator.next() == .workspaceChanged)
+    }
+
+    @Test("A rejected subscription throws instead of returning a dead stream")
+    func rejectedSubscription() async {
+        let transport = FakeTransport(scriptedChunks: [
+            line(#"{"id":"kelpie-sub","error":{"code":"invalid_request","message":"missing field pane_id"}}"#)
+        ])
+        let connection = HerdrEventConnection(transport: transport)
+
+        await #expect(throws: EventConnectionError.subscriptionRejected(
+            code: "invalid_request", message: "missing field pane_id"
+        )) {
+            _ = try await connection.subscribe()
+        }
+    }
+
+    @Test("A rejected subscription closes the transport instead of leaking it")
+    func rejectedSubscriptionClosesTransport() async {
+        let transport = FakeTransport(scriptedChunks: [
+            line(#"{"id":"kelpie-sub","error":{"code":"invalid_request","message":"missing field pane_id"}}"#)
+        ])
+        let connection = HerdrEventConnection(transport: transport)
+
+        do {
+            _ = try await connection.subscribe()
+            Issue.record("expected the rejected subscription to throw")
+        } catch {
+            // Expected; what matters is what happened to the socket.
+        }
+        // The caller never sees this connection, so if subscribe() does not
+        // close it here nothing ever will.
+        #expect(transport.closed)
+    }
+
+    @Test("A subscribe that fails before the handshake still closes the transport")
+    func failedSendClosesTransport() async {
+        let transport = FakeTransport()
+        transport.finish()      // the peer is already gone, so the write fails
+        let connection = HerdrEventConnection(transport: transport)
+
+        do {
+            _ = try await connection.subscribe()
+            Issue.record("expected subscribe() to throw when the write fails")
+        } catch {
+            // Expected.
+        }
+        #expect(transport.closed)
+    }
+
+    @Test("A subscription herdr never acknowledges expires instead of hanging forever")
+    func handshakeTimesOut() async {
+        // The transport connects and accepts the subscribe, then goes quiet.
+        // Without a bound this is the one failure Kelpie cannot recover from:
+        // connectOnce() never returns, so the reconnect backoff is never
+        // reached and the footer reads "Connecting to herdr…" for good.
+        let transport = FakeTransport()
+        let connection = HerdrEventConnection(transport: transport, handshakeTimeout: .milliseconds(50))
+
+        do {
+            _ = try await connection.subscribe()
+            Issue.record("expected the handshake to time out")
+        } catch let error as EventConnectionError {
+            #expect(error == .handshakeTimedOut)
+        } catch {
+            Issue.record("unexpected error \(error)")
+        }
+        #expect(transport.closed)
+    }
+
+    @Test("An acknowledged subscription is unaffected by the handshake timeout")
+    func acknowledgementBeatsTimeout() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport, handshakeTimeout: .seconds(30))
+        _ = try await connection.subscribe()
+        #expect(!transport.closed)
+    }
+
+    @Test("A caller cancelled mid-handshake gets control back instead of hanging forever")
+    func cancelledSubscribeReturnsAndTransportCloses() async throws {
+        // Same shape as HerdrRequestConnectionTests.cancelledCallReturnsAndTransportCloses:
+        // before the fix, a cancelled caller left the handshake continuation
+        // parked forever, because the timeout race's sleeping sibling threw
+        // straight out of `Task.sleep` without resolving it. This defect was
+        // latent in the app today (nothing cancels `connectionTask`), but the
+        // same race shape as the request path deserves the same guard.
+        // `subscribe()` already closes the transport itself on any throw
+        // (see its doc comment), so this only needs to confirm the call
+        // returns at all. See `withDeadline`'s doc comment for why this is
+        // not a `TaskGroup`-based race.
+        let transport = FakeTransport()
+        let connection = HerdrEventConnection(transport: transport, handshakeTimeout: .seconds(30))
+
+        let inner = Task { try await connection.subscribe() }
+        // Let the handshake register before cancelling, so cancellation
+        // exercises the same race a real caller hits after the write.
+        try await Task.sleep(for: .milliseconds(20))
+        inner.cancel()
+
+        let closed = try await withDeadline(.seconds(2)) {
+            do { _ = try await inner.value } catch { /* expected: cancellation */ }
+            return transport.closed
+        }
+        #expect(closed)
+    }
+
+    @Test("A malformed event line does not tear down the stream")
+    func malformedLineTolerated() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        let stream = try await connection.subscribe()
+
+        transport.feed(line("not json at all"))
+        transport.feed(line(updated))
+
+        var iterator = stream.makeAsyncIterator()
+        #expect(await iterator.next() == .paneChanged)
+    }
+
+    @Test("The stream finishes when herdr closes the connection")
+    func streamFinishes() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        let stream = try await connection.subscribe()
+
+        transport.finish()
+
+        var seen = 0
+        for await _ in stream { seen += 1 }
+        #expect(seen == 0)
+    }
+}
