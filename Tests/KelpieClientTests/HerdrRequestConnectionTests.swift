@@ -172,6 +172,13 @@ struct HerdrRequestConnectionTests {
         try await connection.open()
 
         await connection.close()
+        // Let the reader task's own stream-end handling (triggered by
+        // `transport.close()` finishing the chunk stream) fully settle before
+        // issuing a new call. Without this wait, a coincidental race lets a
+        // still-in-flight reader-task cleanup resolve the *new* request by
+        // accident, which would mask a missing `terminated` guard instead of
+        // catching it.
+        try await Task.sleep(for: .milliseconds(20))
 
         do {
             _ = try await connection.ping()

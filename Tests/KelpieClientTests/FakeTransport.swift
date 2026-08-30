@@ -10,6 +10,7 @@ final class FakeTransport: Transport, @unchecked Sendable {
     private var pending: [Data]
     private(set) var connectCount = 0
     private(set) var closed = false
+    private var finished = false
 
     init(scriptedChunks: [Data] = []) {
         self.pending = scriptedChunks
@@ -33,8 +34,17 @@ final class FakeTransport: Transport, @unchecked Sendable {
         withLock { connectCount += 1 }
     }
 
+    /// Mirrors a real socket: a write after the peer has gone fails. Without
+    /// this, a test for "a request after termination must not hang" would hang
+    /// on the very regression it exists to catch, because the request would be
+    /// registered and then silently never answered.
     func send(_ data: Data) async throws {
-        withLock { sent.append(data) }
+        let isClosed = withLock { () -> Bool in
+            let isClosed = closed || finished
+            if !isClosed { sent.append(data) }
+            return isClosed
+        }
+        if isClosed { throw TransportError.closed }
     }
 
     func chunks() -> AsyncThrowingStream<Data, any Error> {
@@ -57,7 +67,10 @@ final class FakeTransport: Transport, @unchecked Sendable {
     }
 
     func finish() {
-        let c = withLock { continuation }
+        let c = withLock { () -> AsyncThrowingStream<Data, any Error>.Continuation? in
+            finished = true
+            return continuation
+        }
         c?.finish()
     }
 
