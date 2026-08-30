@@ -8,8 +8,7 @@ struct StatusCountsTests {
         var s = SessionState()
         _ = s.replace(with: Snapshot(
             agents: statuses.map { pane, status, kind in
-                AgentRecord(paneID: pane, workspaceID: "w0", revision: 1,
-                            status: status, title: nil, agentKind: kind)
+                AgentRecord(paneID: pane, workspaceID: "w0",                             status: status, title: nil, agentKind: kind)
             },
             workspaces: [], protocolVersion: 20
         ))

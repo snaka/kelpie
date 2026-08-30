@@ -19,7 +19,6 @@ struct DecodingTests {
         let record = try JSONDecoder().decode(AgentRecord.self, from: Self.agentJSON)
         #expect(record.paneID == "wX:p1")
         #expect(record.workspaceID == "wX")
-        #expect(record.revision == 2)
         #expect(record.status == .idle)
         #expect(record.title == "教材の準備")
         #expect(record.agentKind == "claude")
@@ -56,64 +55,34 @@ struct DecodingTests {
     }
 }
 
-@Suite("LiveEvent decoding")
-struct LiveEventDecodingTests {
+@Suite("LiveEvent classification")
+struct LiveEventClassificationTests {
 
-    @Test("pane_updated yields a pane upsert")
-    func paneUpdated() throws {
-        let line = Data(#"""
-        {"data":{"pane":{"agent":"claude","agent_status":"working","pane_id":"w0:p1","revision":5,"tab_id":"w0:t1","terminal_id":"t","terminal_title":"◑ 作業中","terminal_title_stripped":"作業中","workspace_id":"w0"},"type":"pane_updated"},"event":"pane_updated"}
-        """#.utf8)
-        let event = try LiveEvent.decode(eventLine: line)
-        #expect(event == .paneUpserted(AgentRecord(
-            paneID: "w0:p1", workspaceID: "w0", revision: 5,
-            status: .working, title: "作業中", agentKind: "claude"
-        )))
+    @Test("Pane event kinds classify as a pane change")
+    func paneKinds() {
+        #expect(LiveEvent.classify(eventKind: "pane_created") == .paneChanged)
+        #expect(LiveEvent.classify(eventKind: "pane_updated") == .paneChanged)
+        #expect(LiveEvent.classify(eventKind: "pane_closed") == .paneChanged)
     }
 
-    @Test("pane_created yields a pane upsert")
-    func paneCreated() throws {
-        let line = Data(#"""
-        {"data":{"pane":{"agent_status":"unknown","pane_id":"w0:p2","revision":0,"tab_id":"w0:t1","terminal_id":"t","workspace_id":"w0"},"type":"pane_created"},"event":"pane_created"}
-        """#.utf8)
-        let event = try LiveEvent.decode(eventLine: line)
-        #expect(event == .paneUpserted(AgentRecord(
-            paneID: "w0:p2", workspaceID: "w0", revision: 0,
-            status: .unknown, title: nil, agentKind: nil
-        )))
+    @Test("Workspace event kinds classify as a workspace change")
+    func workspaceKinds() {
+        #expect(LiveEvent.classify(eventKind: "workspace_created") == .workspaceChanged)
+        #expect(LiveEvent.classify(eventKind: "workspace_updated") == .workspaceChanged)
+        #expect(LiveEvent.classify(eventKind: "workspace_renamed") == .workspaceChanged)
+        #expect(LiveEvent.classify(eventKind: "workspace_closed") == .workspaceChanged)
     }
 
-    @Test("pane_closed yields a pane removal")
-    func paneClosed() throws {
-        let line = Data(#"{"data":{"pane_id":"w0:p2","type":"pane_closed","workspace_id":"w0"},"event":"pane_closed"}"#.utf8)
-        #expect(try LiveEvent.decode(eventLine: line) == .paneClosed(paneID: "w0:p2"))
+    @Test("Uninteresting event kinds classify as nothing")
+    func ignoredKinds() {
+        #expect(LiveEvent.classify(eventKind: "workspace_focused") == nil)
+        #expect(LiveEvent.classify(eventKind: "") == nil)
     }
 
-    @Test("workspace_renamed yields a workspace upsert with the new label")
-    func workspaceRenamed() throws {
-        let line = Data(#"{"data":{"label":"kelpie","type":"workspace_renamed","workspace_id":"w0"},"event":"workspace_renamed"}"#.utf8)
-        #expect(try LiveEvent.decode(eventLine: line)
-            == .workspaceUpserted(WorkspaceRecord(workspaceID: "w0", label: "kelpie")))
-    }
-
-    @Test("workspace_created yields a workspace upsert")
-    func workspaceCreated() throws {
-        let line = Data(#"""
-        {"data":{"type":"workspace_created","workspace":{"active_tab_id":"w0:t1","agent_status":"idle","focused":true,"label":"herdr","number":1,"pane_count":1,"tab_count":1,"workspace_id":"w0"}},"event":"workspace_created"}
-        """#.utf8)
-        #expect(try LiveEvent.decode(eventLine: line)
-            == .workspaceUpserted(WorkspaceRecord(workspaceID: "w0", label: "herdr")))
-    }
-
-    @Test("workspace_closed yields a workspace removal")
-    func workspaceClosed() throws {
-        let line = Data(#"{"data":{"type":"workspace_closed","workspace_id":"w0"},"event":"workspace_closed"}"#.utf8)
-        #expect(try LiveEvent.decode(eventLine: line) == .workspaceClosed(workspaceID: "w0"))
-    }
-
-    @Test("Uninteresting events decode to nil rather than throwing")
-    func ignoredEvent() throws {
-        let line = Data(#"{"data":{"type":"workspace_focused","workspace_id":"w0"},"event":"workspace_focused"}"#.utf8)
-        #expect(try LiveEvent.decode(eventLine: line) == nil)
+    @Test("The dotted subscription names are not event kinds")
+    func subscriptionNamesAreNotEventKinds() {
+        // herdr subscribes by `pane.updated` but emits `pane_updated`. Matching
+        // the wrong form would classify nothing at all, so it is pinned here.
+        #expect(LiveEvent.classify(eventKind: "pane.updated") == nil)
     }
 }

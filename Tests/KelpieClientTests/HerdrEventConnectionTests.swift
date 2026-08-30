@@ -28,7 +28,7 @@ struct HerdrEventConnectionTests {
         #expect(subs.map { $0["type"] as! String } == HerdrEventConnection.subscriptionTypes)
     }
 
-    @Test("Pane events arrive on the stream after the acknowledgement")
+    @Test("A pane event becomes a change signal after the acknowledgement")
     func streamsEvents() async throws {
         let transport = FakeTransport(scriptedChunks: [line(ack)])
         let connection = HerdrEventConnection(transport: transport)
@@ -38,10 +38,7 @@ struct HerdrEventConnectionTests {
         var iterator = stream.makeAsyncIterator()
         let event = await iterator.next()
 
-        #expect(event == .paneUpserted(AgentRecord(
-            paneID: "w0:p1", workspaceID: "w0", revision: 9,
-            status: .blocked, title: "待ち", agentKind: "claude"
-        )))
+        #expect(event == .paneChanged)
     }
 
     @Test("Uninteresting events are filtered out rather than delivered")
@@ -54,14 +51,37 @@ struct HerdrEventConnectionTests {
         transport.feed(line(updated))
 
         var iterator = stream.makeAsyncIterator()
-        let event = await iterator.next()
-        // The focus event was dropped, so the first delivered event is the
-        // pane update.
-        if case .paneUpserted(let record) = event {
-            #expect(record.paneID == "w0:p1")
-        } else {
-            Issue.record("expected a pane upsert, got \(String(describing: event))")
-        }
+        // The focus event was dropped, so the first delivered signal is the
+        // one the pane update produced.
+        #expect(await iterator.next() == .paneChanged)
+    }
+
+    @Test("An event whose payload Kelpie cannot decode still signals a change")
+    func unparseablePayloadStillSignals() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        let stream = try await connection.subscribe()
+
+        // A pane payload with every field renamed: this is what a herdr wire
+        // change looks like from here. The signal must survive it, because the
+        // caller answers with a fresh snapshot and never reads the payload —
+        // dropping it would silently degrade Kelpie to five-minute polling.
+        transport.feed(line(#"{"data":{"pane":{"id":"w0:p1","state":"blocked"},"type":"pane_updated"},"event":"pane_updated"}"#))
+
+        var iterator = stream.makeAsyncIterator()
+        #expect(await iterator.next() == .paneChanged)
+    }
+
+    @Test("An event with no payload at all still signals a change")
+    func payloadlessEventStillSignals() async throws {
+        let transport = FakeTransport(scriptedChunks: [line(ack)])
+        let connection = HerdrEventConnection(transport: transport)
+        let stream = try await connection.subscribe()
+
+        transport.feed(line(#"{"event":"workspace_closed"}"#))
+
+        var iterator = stream.makeAsyncIterator()
+        #expect(await iterator.next() == .workspaceChanged)
     }
 
     @Test("A rejected subscription throws instead of returning a dead stream")
@@ -149,11 +169,7 @@ struct HerdrEventConnectionTests {
         transport.feed(line(updated))
 
         var iterator = stream.makeAsyncIterator()
-        if case .paneUpserted(let record) = await iterator.next() {
-            #expect(record.paneID == "w0:p1")
-        } else {
-            Issue.record("expected the stream to survive a malformed line")
-        }
+        #expect(await iterator.next() == .paneChanged)
     }
 
     @Test("The stream finishes when herdr closes the connection")
