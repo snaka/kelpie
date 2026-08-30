@@ -15,11 +15,11 @@ final class AppCoordinator {
     private var connectionTask: Task<Void, Never>?
     private var resyncTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    private var coalescer = RefreshCoalescer()
     private var events: HerdrEventConnection?
     private var eventStream: AsyncStream<LiveEvent>?
 
     private static let resyncInterval: Duration = .seconds(300)
-    private static let eventDebounce: Duration = .milliseconds(150)
     private static let animationInterval: TimeInterval = 0.1
     private static let knownProtocol = 20
 
@@ -125,11 +125,19 @@ final class AppCoordinator {
     }
 
     private func scheduleRefresh() {
-        refreshTask?.cancel()
-        refreshTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.eventDebounce)
-            guard !Task.isCancelled, let self else { return }
-            await self.refreshFromSnapshot()
+        switch coalescer.signal(at: ContinuousClock.now) {
+        case .fireNow:
+            refreshTask?.cancel()
+            refreshTask = Task { [weak self] in
+                await self?.refreshFromSnapshot()
+            }
+        case .waitFor(let delay):
+            refreshTask?.cancel()
+            refreshTask = Task { [weak self] in
+                try? await Task.sleep(for: delay)
+                guard !Task.isCancelled, let self else { return }
+                await self.refreshFromSnapshot()
+            }
         }
     }
 
@@ -143,6 +151,7 @@ final class AppCoordinator {
                 paneID: transition.paneID
             )
         }
+        coalescer.didRefresh()
         refreshUI()
     }
 
@@ -166,6 +175,7 @@ final class AppCoordinator {
     private func teardown() async {
         resyncTask?.cancel(); resyncTask = nil
         refreshTask?.cancel(); refreshTask = nil
+        coalescer = RefreshCoalescer()
         eventStream = nil
         await events?.close(); events = nil
         state = SessionState()
