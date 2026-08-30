@@ -58,6 +58,23 @@ public enum Wire {
         let event: String?
         let error: Failure?
         let result: JSONPassthrough?
+        /// `decodeIfPresent` cannot tell `"result": null` from a missing
+        /// `result`, and the two mean different things here: the first is an
+        /// answer, the second is a line Kelpie does not recognise.
+        let hasResult: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case id, event, error, result
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeIfPresent(String.self, forKey: .id)
+            event = try container.decodeIfPresent(String.self, forKey: .event)
+            error = try container.decodeIfPresent(Failure.self, forKey: .error)
+            result = try container.decodeIfPresent(JSONPassthrough.self, forKey: .result)
+            hasResult = container.contains(.result)
+        }
     }
 
     /// Captures `result` without knowing its shape, so each caller decodes
@@ -67,7 +84,14 @@ public enum Wire {
         init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
             let value = try container.decode(AnyCodableValue.self)
-            self.data = try JSONSerialization.data(withJSONObject: value.object)
+            // `.fragmentsAllowed` because a `result` need not be an object:
+            // `JSONSerialization` rejects a scalar top level outright, and
+            // without this a perfectly valid `"result": true` would throw here,
+            // be dropped as an unreadable line, and leave the request to fail
+            // only when the socket eventually closes.
+            self.data = try JSONSerialization.data(
+                withJSONObject: value.object, options: [.fragmentsAllowed]
+            )
         }
     }
 
@@ -117,6 +141,13 @@ public enum Wire {
         }
         if let result = envelope.result {
             return .result(id: envelope.id ?? "", payload: result.data)
+        }
+        if envelope.hasResult {
+            // An explicit `"result": null` is still an answer, and the waiting
+            // request must be resolved by it. The payload is the JSON null, so
+            // a caller that needs a real object fails its own decode with
+            // `malformedResponse` instead of hanging until the socket closes.
+            return .result(id: envelope.id ?? "", payload: Data("null".utf8))
         }
         throw WireError.unrecognisedLine
     }
