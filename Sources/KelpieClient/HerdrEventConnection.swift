@@ -127,13 +127,14 @@ public actor HerdrEventConnection {
                                     continuation.finish()
                                     return
                                 }
-                            case .event(_, let raw):
-                                // `try?` flattens the throwing `LiveEvent?`
-                                // return into a single optional: nil covers
-                                // both a decode failure and an event Kelpie
-                                // does not model.
-                                if let event = try? LiveEvent.decode(eventLine: raw) {
-                                    continuation.yield(event)
+                            case .event(let kind, _):
+                                // Classified by kind alone. The payload is
+                                // never read, so a renamed pane field cannot
+                                // silently stop the refreshes — the caller only
+                                // needs to know that something changed, and
+                                // answers with a fresh snapshot.
+                                if let signal = LiveEvent.classify(eventKind: kind) {
+                                    continuation.yield(signal)
                                 }
                             }
                         }

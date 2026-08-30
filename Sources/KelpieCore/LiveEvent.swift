@@ -1,48 +1,35 @@
 import Foundation
 
-/// A herdr subscription event reduced to the four things Kelpie reacts to.
+/// A herdr subscription event reduced to the only thing Kelpie acts on: that
+/// something changed, and roughly what kind of thing changed.
+///
+/// An event is a signal, never a source of truth. herdr replays history that
+/// does not converge to the current state, and `revision` cannot order that
+/// replay, so the coordinator answers any signal with a debounced
+/// `session.snapshot` and discards the payload entirely.
+///
+/// Classifying on the event kind alone is therefore deliberate. Gating the
+/// signal on decoding the pane payload — as this type used to — made every
+/// herdr field rename a silent failure: the decode threw, the signal was
+/// dropped, and Kelpie degraded to five-minute polling with nothing on screen
+/// to say so. That is exactly the stale-menu-bar bug the snapshot-as-authority
+/// redesign exists to prevent, re-entering through the decoder.
 public enum LiveEvent: Equatable, Sendable {
-    case paneUpserted(AgentRecord)
-    case paneClosed(paneID: String)
-    case workspaceUpserted(WorkspaceRecord)
-    case workspaceClosed(workspaceID: String)
+    case paneChanged
+    case workspaceChanged
 
-    private struct Envelope: Decodable {
-        let event: String
-        let data: EventData
-    }
-
-    private struct EventData: Decodable {
-        let pane: AgentRecord?
-        let workspace: WorkspaceRecord?
-        let paneID: String?
-        let workspaceID: String?
-        let label: String?
-
-        enum CodingKeys: String, CodingKey {
-            case pane, workspace, label
-            case paneID = "pane_id"
-            case workspaceID = "workspace_id"
-        }
-    }
-
-    /// Returns `nil` for events Kelpie does not model. Subscribing to a
+    /// Returns `nil` for events Kelpie does not react to. Subscribing to a
     /// narrow set is not a guarantee: herdr may emit others on the same
     /// stream, and an unknown event must never break the connection.
-    public static func decode(eventLine: Data) throws -> LiveEvent? {
-        let envelope = try JSONDecoder().decode(Envelope.self, from: eventLine)
-        switch envelope.event {
-        case "pane_created", "pane_updated":
-            return envelope.data.pane.map { .paneUpserted($0) }
-        case "pane_closed":
-            return envelope.data.paneID.map { .paneClosed(paneID: $0) }
-        case "workspace_created", "workspace_updated":
-            return envelope.data.workspace.map { .workspaceUpserted($0) }
-        case "workspace_renamed":
-            guard let id = envelope.data.workspaceID, let label = envelope.data.label else { return nil }
-            return .workspaceUpserted(WorkspaceRecord(workspaceID: id, label: label))
-        case "workspace_closed":
-            return envelope.data.workspaceID.map { .workspaceClosed(workspaceID: $0) }
+    ///
+    /// The kinds are the underscored forms herdr puts in the `event` field,
+    /// which are not the dotted forms `events.subscribe` takes.
+    public static func classify(eventKind: String) -> LiveEvent? {
+        switch eventKind {
+        case "pane_created", "pane_updated", "pane_closed":
+            return .paneChanged
+        case "workspace_created", "workspace_updated", "workspace_renamed", "workspace_closed":
+            return .workspaceChanged
         default:
             return nil
         }

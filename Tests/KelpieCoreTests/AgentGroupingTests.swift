@@ -8,17 +8,17 @@ struct AgentGroupingTests {
         var s = SessionState()
         _ = s.replace(with: Snapshot(
             agents: [
-                AgentRecord(paneID: "wZ:p1", workspaceID: "wZ", revision: 1, status: .blocked,
+                AgentRecord(paneID: "wZ:p1", workspaceID: "wZ", status: .blocked,
                             title: "Google Workspace ドメイン設定", agentKind: "claude"),
-                AgentRecord(paneID: "w0:p1", workspaceID: "w0", revision: 1, status: .working,
+                AgentRecord(paneID: "w0:p1", workspaceID: "w0", status: .working,
                             title: "Agent状態インジケーター", agentKind: "claude"),
-                AgentRecord(paneID: "wX:p1", workspaceID: "wX", revision: 1, status: .working,
+                AgentRecord(paneID: "wX:p1", workspaceID: "wX", status: .working,
                             title: "教材の準備", agentKind: "claude"),
-                AgentRecord(paneID: "wY:p1", workspaceID: "wY", revision: 1, status: .done,
+                AgentRecord(paneID: "wY:p1", workspaceID: "wY", status: .done,
                             title: "Split PR #746 review", agentKind: "claude"),
-                AgentRecord(paneID: "wQ:p1", workspaceID: "wQ", revision: 1, status: .idle,
+                AgentRecord(paneID: "wQ:p1", workspaceID: "wQ", status: .idle,
                             title: nil, agentKind: "codex"),
-                AgentRecord(paneID: "w0:p2", workspaceID: "w0", revision: 1, status: .working,
+                AgentRecord(paneID: "w0:p2", workspaceID: "w0", status: .working,
                             title: nil, agentKind: nil),
             ],
             workspaces: [
@@ -72,9 +72,9 @@ struct AgentGroupingTests {
         var s = SessionState()
         _ = s.replace(with: Snapshot(
             agents: [
-                AgentRecord(paneID: "w0:p3", workspaceID: "w0", revision: 1, status: .working,
+                AgentRecord(paneID: "w0:p3", workspaceID: "w0", status: .working,
                             title: "Third pane", agentKind: "claude"),
-                AgentRecord(paneID: "w0:p1", workspaceID: "w0", revision: 1, status: .working,
+                AgentRecord(paneID: "w0:p1", workspaceID: "w0", status: .working,
                             title: "First pane", agentKind: "claude"),
             ],
             workspaces: [

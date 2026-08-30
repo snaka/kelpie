@@ -8,12 +8,11 @@ struct SessionStateTests {
     private func agent(
         _ pane: String,
         _ status: AgentStatus,
-        revision: UInt64,
         workspace: String = "w0",
         title: String? = "t",
         kind: String? = "claude"
     ) -> AgentRecord {
-        AgentRecord(paneID: pane, workspaceID: workspace, revision: revision,
+        AgentRecord(paneID: pane, workspaceID: workspace,
                     status: status, title: title, agentKind: kind)
     }
 
@@ -21,7 +20,7 @@ struct SessionStateTests {
     func replaceInstallsSnapshot() {
         var state = SessionState()
         let transitions = state.replace(with: Snapshot(
-            agents: [agent("w0:p1", .working, revision: 3)],
+            agents: [agent("w0:p1", .working)],
             workspaces: [WorkspaceRecord(workspaceID: "w0", label: "herdr")],
             protocolVersion: 20
         ))
@@ -35,7 +34,7 @@ struct SessionStateTests {
     @Test("Replace drops panes that are gone and reports no transition for them")
     func replaceDropsMissingPanes() {
         var state = SessionState()
-        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .idle, revision: 1)],
+        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .idle)],
                                          workspaces: [], protocolVersion: 20))
         let transitions = state.replace(with: Snapshot(agents: [], workspaces: [], protocolVersion: 20))
         #expect(state.agentPanes.isEmpty)
@@ -51,12 +50,13 @@ struct SessionStateTests {
     @Test("Replacing with a snapshot reports a status change as a transition")
     func replaceReportsStatusChange() {
         var state = SessionState()
-        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .done, revision: 7)],
+        _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .done)],
                                          workspaces: [], protocolVersion: 20))
-        // Same revision, different status — exactly the shape herdr emits when a
-        // done mark clears without the terminal title changing.
+        // A status change with no terminal-title change — exactly the shape
+        // herdr emits when a done mark clears. herdr's `revision` does not move
+        // for it, which is why the snapshot, not any event ordering, decides.
         let transitions = state.replace(with: Snapshot(
-            agents: [agent("w0:p1", .idle, revision: 7)], workspaces: [], protocolVersion: 20
+            agents: [agent("w0:p1", .idle)], workspaces: [], protocolVersion: 20
         ))
         #expect(transitions == [StateTransition(
             paneID: "w0:p1", workspaceID: "w0", from: .done, to: .idle, title: "t"
@@ -67,7 +67,7 @@ struct SessionStateTests {
     @Test("Replacing with an unchanged snapshot reports nothing")
     func replaceReportsNothingWhenUnchanged() {
         var state = SessionState()
-        let snapshot = Snapshot(agents: [agent("w0:p1", .working, revision: 3)],
+        let snapshot = Snapshot(agents: [agent("w0:p1", .working)],
                                 workspaces: [], protocolVersion: 20)
         _ = state.replace(with: snapshot)
         #expect(state.replace(with: snapshot).isEmpty)
@@ -77,8 +77,8 @@ struct SessionStateTests {
     func nonAgentPanesExcluded() {
         var state = SessionState()
         _ = state.replace(with: Snapshot(
-            agents: [agent("w0:p1", .working, revision: 1),
-                     agent("w0:p2", .unknown, revision: 1, title: nil, kind: nil)],
+            agents: [agent("w0:p1", .working),
+                     agent("w0:p2", .unknown, title: nil, kind: nil)],
             workspaces: [], protocolVersion: 20
         ))
         #expect(state.agentPanes.map(\.paneID) == ["w0:p1"])
