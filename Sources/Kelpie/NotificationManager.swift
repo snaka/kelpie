@@ -24,7 +24,15 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func authorizationDenied() async -> Bool {
-        await center.notificationSettings().authorizationStatus == .denied
+        // `UNNotificationSettings` is not Sendable under Swift 6.1 (CI's
+        // Xcode 16.4), so go through the completion-handler API and send
+        // back only the status enum.
+        let status = await withCheckedContinuation { continuation in
+            center.getNotificationSettings { settings in
+                continuation.resume(returning: settings.authorizationStatus)
+            }
+        }
+        return status == .denied
     }
 
     /// Posted only for genuine live transitions into `blocked`;
