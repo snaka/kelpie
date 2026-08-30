@@ -22,10 +22,10 @@ its reasoning. The original design doc is
   notification types. `AgentStatus`, `AgentRecord`, `SessionState` (the
   authoritative reducer), `StatusCounts`, `AgentGrouping`, `MenuBarModel`,
   `NotificationPolicy`. Every behavioral rule Kelpie depends on — bootstrap is
-  silent, resync is silent, a live transition into `blocked` notifies exactly
-  once, stale/duplicate events are discarded by `revision` — lives here and is
-  testable with `swift test` and no running herdr. New decision logic belongs
-  here, not in the app layer.
+  silent, a live transition into `blocked` notifies exactly once, staying
+  blocked does not re-fire, and a burst of change signals coalesces into one
+  refresh without starving — lives here and is testable with `swift test` and
+  no running herdr. New decision logic belongs here, not in the app layer.
 - **`KelpieClient`** — the herdr socket client: `UnixSocketTransport`,
   `NDJSONFramer`, `Wire` request/response encode-decode, `HerdrRequestConnection`
   (short-lived, one call), `HerdrEventConnection` (long-lived subscription),
@@ -81,8 +81,9 @@ xcodebuild -project Kelpie.xcodeproj -scheme Kelpie -configuration Debug \
 
 These are not fully discoverable from herdr's own documentation, and two of
 them **contradict** it. Re-verify against a live session with
-`herdr agent read <pane> --source detection --format text` /
-`herdr agent explain <pane> --json` before assuming they still hold on a newer
+`herdr api snapshot`, `herdr api schema --json`, and a raw
+`events.subscribe` session against `~/.config/herdr/herdr.sock` before assuming
+they still hold on a newer
 herdr.
 
 - **A request connection is spent after one answer.** herdr closes it, and a
@@ -94,10 +95,17 @@ herdr.
 - **herdr replays historical events when a subscription opens**, contrary to
   its own documentation, which states lifecycle subscriptions "do not replay
   events retained before that point." In practice, subscribing emits a burst
-  of historical `pane_created`/`workspace_focused`-style events at low
-  `revision` numbers before live events begin. `SessionState.apply(_:)`
-  discards anything whose `revision` has not strictly advanced, which makes
-  Kelpie correct whether or not the replay burst is present.
+  of historical events before live events begin, and **that replay does not
+  converge to the current state** — it was measured at 16 events over 1.1 s,
+  including panes that no longer exist. This is why events are only a signal
+  that something changed: a debounced `session.snapshot` is the sole authority.
+- **`revision` cannot order state changes.** herdr increments it in exactly one
+  place (`src/terminal/state.rs`), when the *stripped terminal title* changes —
+  never on a status change. A stale replay event and the authoritative snapshot
+  were observed carrying the same `revision` (2) with different statuses. Do not
+  reintroduce a `revision` guard on the event path; it silently drops real
+  status changes, which is the bug Task 20 fixed. `state_change_seq` would order
+  them but exists only on snapshot agent records, not on the event payload.
 - **`pane.agent_status_changed` cannot be subscribed globally.** It requires a
   `pane_id` and herdr rejects a global subscription to it with
   `invalid request: missing field 'pane_id'`. `pane.updated` carries the same
