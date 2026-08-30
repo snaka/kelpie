@@ -1,7 +1,18 @@
 # Kelpie — Design
 
 Date: 2026-08-30
-Status: approved, ready for implementation planning
+Status: implemented
+
+**Amended 2026-08-30 — superseded by Task 20.** This spec originally had Kelpie
+apply event payloads to its state, ordering them by herdr's `revision`. Testing
+against a live herdr 0.8.2 server proved that unsound: herdr increments
+`revision` only when the *stripped terminal title* changes, so it cannot order
+status transitions, and the subscribe-time replay burst does not converge to the
+current state — a stale burst event and the authoritative snapshot were observed
+carrying the same `revision` with different statuses. Events are now a change
+signal only; a debounced `session.snapshot` is the sole authority for agent
+state. The sections below are amended in place; the original reasoning and the
+evidence are preserved in the plan's Task 20.
 
 ## Purpose
 
@@ -115,15 +126,18 @@ testable with `swift test` and without a running herdr.
 
 Responsibilities:
 
-- `SessionState.replace(with: Snapshot)` — bootstrap and periodic resync.
-- `SessionState.apply(_ event: LiveEvent) -> [StateTransition]` — applies one
-  event, discarding stale ones by `revision`, and reports the transitions it
-  caused.
+- `SessionState.replace(with: Snapshot)` — the only way state changes. It
+  installs a snapshot and reports the transitions between the old state and the
+  new one. There is no per-event application and no `revision` guard: `revision`
+  counts stripped-title changes, not state changes, so it cannot order status.
+- `RefreshCoalescer` — decides when a burst of change signals becomes one
+  refresh. herdr's replay burst arrives about 70 ms apart, denser than the
+  debounce, so the coalescer caps how long it will defer.
 - `StatusCounts` — the blocked/working/done/idle tallies the menu bar renders.
 - Grouping and ordering for the popover.
-- `notificationsToPost(for:phase:)` — the pure decision of which transitions
-  deserve a notification, given whether the change came from bootstrap or from
-  live events.
+- `NotificationPolicy.notifiable(_:phase:)` — the pure decision of which
+  transitions deserve a notification. Bootstrap is silent because it describes
+  state that already existed; everything after it is a real change.
 
 ### `KelpieClient` — herdr socket client
 
@@ -289,13 +303,14 @@ The governing principle is that a menu bar app must not die.
 
 ## Testing
 
-`KelpieCoreTests` covers the logic that actually decides behaviour: event
-application under out-of-order, duplicate, and regressing `revision` values; the
-historical-event burst observed at subscribe time; count aggregation; grouping and
-ordering; workspace label resolution and renames; and the notification rules —
-that bootstrap-derived blocked states are silent, that resync-derived ones are
-silent, that a genuine transition into blocked fires exactly once, and that
-staying blocked does not re-fire.
+`KelpieCoreTests` covers the logic that actually decides behaviour: that
+replacing with a snapshot reports a status change even when `revision` has not
+moved — the exact shape herdr emits when a `done` mark clears — and reports
+nothing when nothing changed; count aggregation; grouping and ordering, including
+the pane-id tiebreaker that keeps rows stable; the refresh coalescer's cap at the
+replay burst's real cadence; and the notification rules — that bootstrap-derived
+blocked states are silent, that a genuine transition into blocked fires exactly
+once, and that staying blocked does not re-fire.
 
 `KelpieClientTests` focuses on NDJSON framing against a fake transport: several
 lines arriving in one read, a line split across reads, a very long line,
