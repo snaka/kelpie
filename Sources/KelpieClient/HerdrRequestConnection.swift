@@ -103,7 +103,15 @@ public actor HerdrRequestConnection {
         let message: WireMessage = try await withThrowingTaskGroup(of: WireMessage.self) { group in
             group.addTask { try await self.awaitAnswer(id: id, line: line) }
             group.addTask {
-                try await Task.sleep(for: timeout)
+                do {
+                    try await Task.sleep(for: timeout)
+                } catch {
+                    // Early either because the answer arrived (cancelAll below) or because the
+                    // caller was cancelled. The second leaves the sibling parked on a
+                    // continuation nothing else resolves; a no-op once the answer removed it.
+                    await self.fail(id: id, with: error)
+                    throw error
+                }
                 // Closing the transport is what actually resolves the waiter:
                 // it is only ever resumed by the reader, which is parked on the
                 // socket, so cancelling the group alone would leave that

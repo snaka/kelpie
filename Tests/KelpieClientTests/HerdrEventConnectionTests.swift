@@ -159,6 +159,34 @@ struct HerdrEventConnectionTests {
         #expect(!transport.closed)
     }
 
+    @Test("A caller cancelled mid-handshake gets control back instead of hanging forever")
+    func cancelledSubscribeReturnsAndTransportCloses() async throws {
+        // Same shape as HerdrRequestConnectionTests.cancelledCallReturnsAndTransportCloses:
+        // before the fix, a cancelled caller left the handshake continuation
+        // parked forever, because the timeout race's sleeping sibling threw
+        // straight out of `Task.sleep` without resolving it. This defect was
+        // latent in the app today (nothing cancels `connectionTask`), but the
+        // same race shape as the request path deserves the same guard.
+        // `subscribe()` already closes the transport itself on any throw
+        // (see its doc comment), so this only needs to confirm the call
+        // returns at all. See `withDeadline`'s doc comment for why this is
+        // not a `TaskGroup`-based race.
+        let transport = FakeTransport()
+        let connection = HerdrEventConnection(transport: transport, handshakeTimeout: .seconds(30))
+
+        let inner = Task { try await connection.subscribe() }
+        // Let the handshake register before cancelling, so cancellation
+        // exercises the same race a real caller hits after the write.
+        try await Task.sleep(for: .milliseconds(20))
+        inner.cancel()
+
+        let closed = try await withDeadline(.seconds(2)) {
+            do { _ = try await inner.value } catch { /* expected: cancellation */ }
+            return transport.closed
+        }
+        #expect(closed)
+    }
+
     @Test("A malformed event line does not tear down the stream")
     func malformedLineTolerated() async throws {
         let transport = FakeTransport(scriptedChunks: [line(ack)])

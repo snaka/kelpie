@@ -200,6 +200,40 @@ struct HerdrRequestConnectionTests {
         #expect(!transport.closed)
     }
 
+    @Test("A caller cancelled mid-request gets control back instead of hanging forever")
+    func cancelledCallReturnsAndTransportCloses() async throws {
+        // Regression test for the deadlock this fix closes: on parent
+        // cancellation the timeout child used to throw straight out of
+        // `Task.sleep` before reaching `expire()`, leaving `awaitAnswer`'s
+        // continuation permanently parked — `withThrowingTaskGroup` then
+        // waits forever to drain it, so `call()` never returns. A herdr that
+        // holds the socket open and answers nothing hits this on every
+        // coalesced refresh signal and on `teardown()`.
+        let transport = FakeTransport()
+        // Generous on purpose: this proves the *cancellation* path resolves
+        // the call, not the ordinary timeout path racing it.
+        let connection = HerdrRequestConnection(transport: transport, timeout: .seconds(30))
+        try await connection.open()
+
+        let inner = Task { try await connection.snapshot() }
+        // Let the request register its waiter before cancelling, so
+        // cancellation exercises the same race a real caller hits after the
+        // write.
+        try await Task.sleep(for: .milliseconds(20))
+        inner.cancel()
+
+        // Mirrors `AppCoordinator.request { }`, whose `catch` block closes
+        // the connection once the call has returned control to it — the
+        // thing this fix restores. See `withDeadline`'s doc comment for why
+        // this is not a `TaskGroup`-based race.
+        let closed = try await withDeadline(.seconds(2)) {
+            do { _ = try await inner.value } catch { /* expected: cancellation */ }
+            await connection.close()
+            return transport.closed
+        }
+        #expect(closed)
+    }
+
     @Test("A call made after close() fails immediately instead of hanging")
     func callAfterClose() async throws {
         let transport = FakeTransport()

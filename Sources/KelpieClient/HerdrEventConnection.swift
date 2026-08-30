@@ -40,6 +40,12 @@ public actor HerdrEventConnection {
     /// Set before the transport is closed on expiry, so the reader reports the
     /// timeout rather than the stream end that the close itself causes.
     private var handshakeExpired = false
+    /// The pending handshake continuation, if the handshake has not yet been
+    /// resolved. Stored on the actor — rather than only captured locally by
+    /// the reader task — so the timeout race's sleeping sibling can resolve it
+    /// too when the caller is cancelled; see `resolveHandshake` and
+    /// `subscribe()`.
+    private var handshakeContinuation: CheckedContinuation<AsyncStream<LiveEvent>, any Error>?
 
     public init(
         transport: any Transport,
@@ -64,7 +70,17 @@ public actor HerdrEventConnection {
             return try await withThrowingTaskGroup(of: AsyncStream<LiveEvent>.self) { group in
                 group.addTask { try await self.performSubscribe() }
                 group.addTask {
-                    try await Task.sleep(for: timeout)
+                    do {
+                        try await Task.sleep(for: timeout)
+                    } catch {
+                        // Early either because the handshake already resolved
+                        // (cancelAll below) or because the caller was
+                        // cancelled. The second leaves the handshake
+                        // continuation parked with nothing else to resolve it;
+                        // a no-op once the reader task already consumed it.
+                        await self.resolveHandshake(.failure(error))
+                        throw error
+                    }
                     // Closing the transport is what actually unblocks the
                     // handshake: its continuation is only ever resumed from the
                     // reader task, which is parked on the socket, so cancelling
@@ -102,6 +118,7 @@ public actor HerdrEventConnection {
         let (stream, continuation) = AsyncStream<LiveEvent>.makeStream()
 
         return try await withCheckedThrowingContinuation { handshake in
+            self.handshakeContinuation = handshake
             readerTask = Task {
                 var framer = NDJSONFramer()
                 var acknowledged = false
@@ -118,13 +135,13 @@ public actor HerdrEventConnection {
                                     // AsyncStream buffers, so events decoded
                                     // before the caller starts iterating are
                                     // held rather than dropped.
-                                    handshake.resume(returning: stream)
+                                    self.resolveHandshake(.success(stream))
                                 }
                             case .failure(_, let code, let text):
                                 if !acknowledged {
                                     acknowledged = true
-                                    handshake.resume(throwing: EventConnectionError
-                                        .subscriptionRejected(code: code, message: text))
+                                    self.resolveHandshake(.failure(EventConnectionError
+                                        .subscriptionRejected(code: code, message: text)))
                                     continuation.finish()
                                     return
                                 }
@@ -146,13 +163,24 @@ public actor HerdrEventConnection {
                 }
 
                 if !acknowledged {
-                    handshake.resume(throwing: self.handshakeExpired
+                    self.resolveHandshake(.failure(self.handshakeExpired
                         ? EventConnectionError.handshakeTimedOut
-                        : EventConnectionError.streamEnded)
+                        : EventConnectionError.streamEnded))
                 }
                 continuation.finish()
             }
         }
+    }
+
+    /// Resolves the pending handshake continuation exactly once, whichever of
+    /// the reader task (success, rejection, or stream end) or the timeout
+    /// race's cancelled sleeping sibling gets there first. A no-op once the
+    /// continuation has already been consumed, so a cancelled caller can never
+    /// leave it — or a later resolver — parked.
+    private func resolveHandshake(_ result: Result<AsyncStream<LiveEvent>, any Error>) {
+        guard let continuation = handshakeContinuation else { return }
+        handshakeContinuation = nil
+        continuation.resume(with: result)
     }
 
     /// Flags the expiry before closing, so whichever of the two racing tasks
