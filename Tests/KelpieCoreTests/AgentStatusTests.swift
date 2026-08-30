@@ -30,13 +30,4 @@ struct AgentStatusTests {
         let holder = try JSONDecoder().decode(Holder.self, from: json)
         #expect(holder.agentStatus == .unknown)
     }
-
-    @Test("Only blocked, working and done are counted in the menu bar")
-    func countingRule() {
-        #expect(AgentStatus.blocked.countsInMenuBar)
-        #expect(AgentStatus.working.countsInMenuBar)
-        #expect(AgentStatus.done.countsInMenuBar)
-        #expect(!AgentStatus.idle.countsInMenuBar)
-        #expect(!AgentStatus.unknown.countsInMenuBar)
-    }
 }

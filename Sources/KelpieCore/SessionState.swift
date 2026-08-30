@@ -20,7 +20,12 @@ public struct SessionState: Equatable, Sendable {
             uniqueKeysWithValues: snapshot.workspaces.map { ($0.workspaceID, $0.label) }
         )
         return snapshot.agents.compactMap { record in
-            transition(from: previous[record.paneID], to: record)
+            // Only panes with a detected agent, matching `agentPanes`. herdr
+            // reports plain shells too, and one of those reporting `blocked`
+            // would otherwise post a notification for a row that appears
+            // nowhere in the counts or the popover.
+            guard record.isAgentPane else { return nil }
+            return transition(from: previous[record.paneID], to: record)
         }
     }
 

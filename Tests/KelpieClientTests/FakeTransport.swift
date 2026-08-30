@@ -8,7 +8,6 @@ final class FakeTransport: Transport, @unchecked Sendable {
     private var sent: [Data] = []
     private var continuation: AsyncThrowingStream<Data, any Error>.Continuation?
     private var pending: [Data]
-    private(set) var connectCount = 0
     private(set) var closed = false
     private var finished = false
 
@@ -30,9 +29,7 @@ final class FakeTransport: Transport, @unchecked Sendable {
         withLock { sent }
     }
 
-    func connect() async throws {
-        withLock { connectCount += 1 }
-    }
+    func connect() async throws {}
 
     /// Mirrors a real socket: a write after the peer has gone fails. Without
     /// this, a test for "a request after termination must not hang" would hang

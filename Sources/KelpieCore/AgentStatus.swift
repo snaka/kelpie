@@ -20,13 +20,4 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self.init(wire: raw)
     }
-
-    /// Idle and unknown agents are listed in the popover but never tallied in
-    /// the menu bar, which is reserved for states that want attention.
-    public var countsInMenuBar: Bool {
-        switch self {
-        case .blocked, .working, .done: return true
-        case .idle, .unknown: return false
-        }
-    }
 }
