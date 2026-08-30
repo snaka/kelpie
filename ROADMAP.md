@@ -1,0 +1,36 @@
+# Roadmap
+
+Work deliberately deferred from the v1 release, each with the reason it was
+left out rather than an oversight.
+
+- **Named herdr sessions.** v1 watches the default session's socket at
+  `~/.config/herdr/herdr.sock` only. Named sessions live under
+  `~/.config/herdr/sessions/<name>/herdr.sock` and would need discovery
+  (enumerating that directory, presenting a chooser or a per-session menu)
+  plus one connection pair — request and event — per session Kelpie watches.
+
+- **Choosing which client to activate.** When several herdr clients are
+  attached at once, `TerminalActivator` activates the first one it finds
+  while walking the process list. Picking the "right" one — e.g. the client
+  actually showing the target pane, or the most recently focused one — needs
+  information Kelpie does not currently have a way to ask herdr for.
+
+- **Notifications for `done`.** Deliberately omitted. Blocked is the state
+  that needs you; adding a second notification-worthy status would make
+  notifications frequent enough that they stop being worth reading, which is
+  the property the current rules are built to protect.
+
+- **A settings window.** Only if preferences ever outgrow the single
+  "Start at login" toggle already in the popover footer. Adding a window for
+  one boolean would be more surface than the feature deserves.
+
+- **Re-reading Reduce Motion on the OS notification.** `AppCoordinator`
+  currently reads `NSWorkspace.shared.accessibilityDisplayShouldReduceMotion`
+  only inside `refreshUI()`, which runs on state changes (connect, live
+  events, resync) — not in response to
+  `NSWorkspace.accessibilityDisplayOptionsDidChangeNotification`. Toggling
+  Reduce Motion mid-session while agents are working therefore leaves the
+  spinner animating (or static) until the next state change flips it, rather
+  than reacting immediately. Low priority since the setting rarely changes
+  while Kelpie is running, but worth fixing if it turns out to matter more in
+  practice.
