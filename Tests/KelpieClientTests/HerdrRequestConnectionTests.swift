@@ -145,4 +145,39 @@ struct HerdrRequestConnectionTests {
             #expect(error == .streamEnded)
         }
     }
+
+    @Test("A call made after the stream has already ended fails immediately instead of hanging")
+    func callAfterStreamEnded() async throws {
+        let transport = FakeTransport()
+        let connection = HerdrRequestConnection(transport: transport)
+        try await connection.open()
+
+        transport.finish()
+        // Give the reader task a moment to observe the finished stream and
+        // mark the connection terminated before the next call is made.
+        try await Task.sleep(for: .milliseconds(20))
+
+        do {
+            _ = try await connection.ping()
+            Issue.record("expected ping() to throw once the connection has already terminated")
+        } catch let error as RequestError {
+            #expect(error == .streamEnded)
+        }
+    }
+
+    @Test("A call made after close() fails immediately instead of hanging")
+    func callAfterClose() async throws {
+        let transport = FakeTransport()
+        let connection = HerdrRequestConnection(transport: transport)
+        try await connection.open()
+
+        await connection.close()
+
+        do {
+            _ = try await connection.ping()
+            Issue.record("expected ping() to throw after close()")
+        } catch let error as RequestError {
+            #expect(error == .streamEnded)
+        }
+    }
 }

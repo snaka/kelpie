@@ -12,12 +12,17 @@ public enum RequestError: Error, Equatable {
 ///
 /// This is separate from the event connection because `events.subscribe` keeps
 /// its connection open streaming, so request/response calls cannot share it.
+///
+/// **One request per instance.** herdr closes a request connection once it has
+/// answered — verified against 0.8.2, where a second write on the same socket
+/// fails with EPIPE. Construct a fresh connection for every request.
 public actor HerdrRequestConnection {
     private let transport: any Transport
     private var framer = NDJSONFramer()
     private var waiters: [String: CheckedContinuation<WireMessage, any Error>] = [:]
     private var readerTask: Task<Void, Never>?
     private var nextID = 0
+    private var terminated = false
 
     public init(transport: any Transport) {
         self.transport = transport
@@ -66,6 +71,12 @@ public actor HerdrRequestConnection {
     }
 
     private func call(method: String, params: some Encodable) async throws -> Data {
+        // Without this, a call made after the connection has already ended
+        // would register a waiter nothing will ever resolve — a permanent
+        // hang. herdr closes the socket after one answer, so a second call on
+        // the same instance lands here rather than on a live connection.
+        guard !terminated else { throw RequestError.streamEnded }
+
         nextID += 1
         let id = "kelpie-\(nextID)"
         let line = try Wire.encodeRequest(id: id, method: method, params: params)
@@ -112,6 +123,7 @@ public actor HerdrRequestConnection {
     }
 
     private func failAll(with error: any Error) {
+        terminated = true
         let pending = waiters
         waiters.removeAll()
         for (_, continuation) in pending {
