@@ -223,7 +223,7 @@ final class AppCoordinator {
     private func jump(to paneID: String) {
         Task {
             try? await request { try await $0.focus(paneID: paneID) }
-            TerminalActivator.activateHerdrHost()
+            await TerminalActivator.activateHerdrHost()
         }
     }
 }
