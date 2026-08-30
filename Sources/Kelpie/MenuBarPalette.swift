@@ -9,7 +9,11 @@ enum MenuBarPalette {
         case .blocked: return .systemRed
         case .working: return .systemYellow
         case .done: return .systemGreen
-        case .resting: return .tertiaryLabelColor
+        // secondaryLabel, not tertiary. At tertiary the resting glyph is
+        // effectively invisible against a busy menu bar — the user could not
+        // tell Kelpie was running at all. "Does not compete for attention"
+        // has to stop short of "absent".
+        case .resting: return .secondaryLabelColor
         }
     }
 }
