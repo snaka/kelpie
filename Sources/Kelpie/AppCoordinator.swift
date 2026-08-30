@@ -26,6 +26,15 @@ final class AppCoordinator {
         menuBar.setPopoverContent(NSHostingController(rootView: AgentListView(model: model)))
         model.onQuit = { NSApp.terminate(nil) }
         model.onSelect = { [weak self] paneID in self?.jump(to: paneID) }
+
+        NotificationManager.shared.onActivate = { [weak self] paneID in
+            self?.jump(to: paneID)
+        }
+        Task {
+            _ = await NotificationManager.shared.requestAuthorization()
+            model.notificationsDenied = await NotificationManager.shared.authorizationDenied()
+        }
+
         connectionTask = Task { await runConnectionLoop() }
     }
 
