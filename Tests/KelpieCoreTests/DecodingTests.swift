@@ -55,3 +55,65 @@ struct DecodingTests {
         #expect(snapshot.workspaces[0].label == "larning-math")
     }
 }
+
+@Suite("LiveEvent decoding")
+struct LiveEventDecodingTests {
+
+    @Test("pane_updated yields a pane upsert")
+    func paneUpdated() throws {
+        let line = Data(#"""
+        {"data":{"pane":{"agent":"claude","agent_status":"working","pane_id":"w0:p1","revision":5,"tab_id":"w0:t1","terminal_id":"t","terminal_title":"◑ 作業中","terminal_title_stripped":"作業中","workspace_id":"w0"},"type":"pane_updated"},"event":"pane_updated"}
+        """#.utf8)
+        let event = try LiveEvent.decode(eventLine: line)
+        #expect(event == .paneUpserted(AgentRecord(
+            paneID: "w0:p1", workspaceID: "w0", revision: 5,
+            status: .working, title: "作業中", agentKind: "claude"
+        )))
+    }
+
+    @Test("pane_created yields a pane upsert")
+    func paneCreated() throws {
+        let line = Data(#"""
+        {"data":{"pane":{"agent_status":"unknown","pane_id":"w0:p2","revision":0,"tab_id":"w0:t1","terminal_id":"t","workspace_id":"w0"},"type":"pane_created"},"event":"pane_created"}
+        """#.utf8)
+        let event = try LiveEvent.decode(eventLine: line)
+        #expect(event == .paneUpserted(AgentRecord(
+            paneID: "w0:p2", workspaceID: "w0", revision: 0,
+            status: .unknown, title: nil, agentKind: nil
+        )))
+    }
+
+    @Test("pane_closed yields a pane removal")
+    func paneClosed() throws {
+        let line = Data(#"{"data":{"pane_id":"w0:p2","type":"pane_closed","workspace_id":"w0"},"event":"pane_closed"}"#.utf8)
+        #expect(try LiveEvent.decode(eventLine: line) == .paneClosed(paneID: "w0:p2"))
+    }
+
+    @Test("workspace_renamed yields a workspace upsert with the new label")
+    func workspaceRenamed() throws {
+        let line = Data(#"{"data":{"label":"kelpie","type":"workspace_renamed","workspace_id":"w0"},"event":"workspace_renamed"}"#.utf8)
+        #expect(try LiveEvent.decode(eventLine: line)
+            == .workspaceUpserted(WorkspaceRecord(workspaceID: "w0", label: "kelpie")))
+    }
+
+    @Test("workspace_created yields a workspace upsert")
+    func workspaceCreated() throws {
+        let line = Data(#"""
+        {"data":{"type":"workspace_created","workspace":{"active_tab_id":"w0:t1","agent_status":"idle","focused":true,"label":"herdr","number":1,"pane_count":1,"tab_count":1,"workspace_id":"w0"}},"event":"workspace_created"}
+        """#.utf8)
+        #expect(try LiveEvent.decode(eventLine: line)
+            == .workspaceUpserted(WorkspaceRecord(workspaceID: "w0", label: "herdr")))
+    }
+
+    @Test("workspace_closed yields a workspace removal")
+    func workspaceClosed() throws {
+        let line = Data(#"{"data":{"type":"workspace_closed","workspace_id":"w0"},"event":"workspace_closed"}"#.utf8)
+        #expect(try LiveEvent.decode(eventLine: line) == .workspaceClosed(workspaceID: "w0"))
+    }
+
+    @Test("Uninteresting events decode to nil rather than throwing")
+    func ignoredEvent() throws {
+        let line = Data(#"{"data":{"type":"workspace_focused","workspace_id":"w0"},"event":"workspace_focused"}"#.utf8)
+        #expect(try LiveEvent.decode(eventLine: line) == nil)
+    }
+}
