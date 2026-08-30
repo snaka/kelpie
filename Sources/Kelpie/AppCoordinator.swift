@@ -26,6 +26,10 @@ final class AppCoordinator {
         menuBar.setPopoverContent(NSHostingController(rootView: AgentListView(model: model)))
         model.onQuit = { NSApp.terminate(nil) }
         model.onSelect = { [weak self] paneID in self?.jump(to: paneID) }
+        model.startAtLogin = LoginItemController.isEnabled
+        model.onToggleLoginItem = { [weak self] enabled in
+            self?.model.startAtLogin = LoginItemController.setEnabled(enabled)
+        }
 
         NotificationManager.shared.onActivate = { [weak self] paneID in
             self?.jump(to: paneID)
