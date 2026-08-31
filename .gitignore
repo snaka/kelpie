@@ -4,3 +4,4 @@ build/
 .swiftpm/
 .build/
 .superpowers/
+*.p12
