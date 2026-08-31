@@ -1,5 +1,7 @@
 # Kelpie
 
+<img src="Sources/Kelpie/Assets.xcassets/AppIcon.appiconset/icon_256.png" width="128" alt="Kelpie app icon">
+
 Kelpie is a macOS menu bar app that shows the live state of the coding agents
 running under [herdr](https://github.com/herdrdev/herdr), animated, from
 outside herdr itself.
@@ -145,3 +147,7 @@ no real effect. This can only be verified once Kelpie is installed to
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+The app icon incorporates the dog face from
+[Noto Emoji](https://github.com/googlefonts/noto-emoji), © Google, used under
+the [Apache License 2.0](https://github.com/googlefonts/noto-emoji/blob/main/LICENSE).
