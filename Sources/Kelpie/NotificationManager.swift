@@ -20,7 +20,13 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func requestAuthorization() async -> Bool {
-        (try? await center.requestAuthorization(options: [.alert, .sound])) ?? false
+        // Completion-handler form for the same reason as below: Swift 6.1
+        // won't send the non-Sendable center into the async overload.
+        await withCheckedContinuation { continuation in
+            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                continuation.resume(returning: granted)
+            }
+        }
     }
 
     func authorizationDenied() async -> Bool {
