@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import KelpieCore
 @testable import KelpieClient
 
 @Suite("Wire")
@@ -34,6 +35,22 @@ struct WireTests {
         let params = object["params"] as! [String: Any]
         let subs = params["subscriptions"] as! [[String: Any]]
         #expect(subs.map { $0["type"] as! String } == ["pane.updated", "pane.closed"])
+    }
+
+    @Test("A per-pane subscription carries its pane_id; a global one omits the key")
+    func encodePerPaneSubscribe() throws {
+        let data = try Wire.encodeRequest(id: "sub2", method: "events.subscribe",
+                                          params: SubscribeParams(requests: [
+                                              SubscriptionRequest(type: "pane.updated", paneID: nil),
+                                              SubscriptionRequest(type: "pane.agent_status_changed",
+                                                                  paneID: "w0:p1"),
+                                          ]))
+        let object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let subs = (object["params"] as! [String: Any])["subscriptions"] as! [[String: Any]]
+        #expect(subs[0]["type"] as? String == "pane.updated")
+        #expect(subs[0]["pane_id"] == nil)
+        #expect(subs[1]["type"] as? String == "pane.agent_status_changed")
+        #expect(subs[1]["pane_id"] as? String == "w0:p1")
     }
 
     @Test("A success response decodes to a result carrying its raw payload")

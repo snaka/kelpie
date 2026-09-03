@@ -22,11 +22,16 @@ public enum LiveEvent: Equatable, Sendable {
     /// narrow set is not a guarantee: herdr may emit others on the same
     /// stream, and an unknown event must never break the connection.
     ///
-    /// The kinds are the underscored forms herdr puts in the `event` field,
-    /// which are not the dotted forms `events.subscribe` takes.
+    /// Global events arrive with the underscored forms in the `event` field
+    /// (`pane_updated`), which are not the dotted forms `events.subscribe`
+    /// takes — but per-pane subscription events arrive with the dotted form
+    /// (`pane.agent_status_changed`, herdr's `SubscriptionEventKind`). Both
+    /// spellings are accepted so a herdr-side normalisation of either family
+    /// cannot silently drop the signal.
     public static func classify(eventKind: String) -> LiveEvent? {
         switch eventKind {
-        case "pane_created", "pane_updated", "pane_closed":
+        case "pane_created", "pane_updated", "pane_closed",
+             "pane.agent_status_changed", "pane_agent_status_changed":
             return .paneChanged
         case "workspace_created", "workspace_updated", "workspace_renamed", "workspace_closed":
             return .workspaceChanged

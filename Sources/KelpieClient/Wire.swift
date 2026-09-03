@@ -1,4 +1,5 @@
 import Foundation
+import KelpieCore
 
 public struct EmptyParams: Encodable, Sendable {
     public init() {}
@@ -12,12 +13,31 @@ public struct AgentTargetParams: Encodable, Sendable {
 
 public struct SubscriptionType: Encodable, Sendable {
     public let type: String
+    /// Present only for the per-pane kinds; `nil` omits the key entirely,
+    /// which is what herdr requires for the global kinds.
+    public let paneID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case paneID = "pane_id"
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+        try container.encodeIfPresent(paneID, forKey: .paneID)
+    }
 }
 
 public struct SubscribeParams: Encodable, Sendable {
     public let subscriptions: [SubscriptionType]
+
     public init(types: [String]) {
-        self.subscriptions = types.map { SubscriptionType(type: $0) }
+        self.subscriptions = types.map { SubscriptionType(type: $0, paneID: nil) }
+    }
+
+    public init(requests: [KelpieCore.SubscriptionRequest]) {
+        self.subscriptions = requests.map { SubscriptionType(type: $0.type, paneID: $0.paneID) }
     }
 }
 

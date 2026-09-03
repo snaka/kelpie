@@ -63,6 +63,10 @@ struct LiveEventClassificationTests {
         #expect(LiveEvent.classify(eventKind: "pane_created") == .paneChanged)
         #expect(LiveEvent.classify(eventKind: "pane_updated") == .paneChanged)
         #expect(LiveEvent.classify(eventKind: "pane_closed") == .paneChanged)
+        // Per-pane subscription events carry the dotted kind, unlike the
+        // underscored global events on the same stream.
+        #expect(LiveEvent.classify(eventKind: "pane.agent_status_changed") == .paneChanged)
+        #expect(LiveEvent.classify(eventKind: "pane_agent_status_changed") == .paneChanged)
     }
 
     @Test("Workspace event kinds classify as a workspace change")

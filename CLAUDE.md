@@ -106,11 +106,22 @@ herdr.
   reintroduce a `revision` guard on the event path; it silently drops real
   status changes, which is the bug Task 20 fixed. `state_change_seq` would order
   them but exists only on snapshot agent records, not on the event payload.
-- **`pane.agent_status_changed` cannot be subscribed globally.** It requires a
-  `pane_id` and herdr rejects a global subscription to it with
-  `invalid request: missing field 'pane_id'`. `pane.updated` carries the same
-  `agent_status` information for every pane, so `HerdrEventConnection`
-  subscribes to that instead — see `HerdrEventConnection.subscriptionTypes`.
+- **Live agent status changes are emitted only as `pane.agent_status_changed`,
+  which must be subscribed per pane.** herdr rejects a global subscription to
+  it (`invalid request: missing field 'pane_id'`), and the global
+  `pane.updated` **never fires on a status change** — it fires on
+  stripped-title changes, agent renames, and metadata expiry only (herdr
+  `src/app/api.rs` `emit_pane_state_update`, `src/app/terminal_titles.rs`).
+  The connect-time replay does contain `pane.updated` entries carrying varied
+  `agent_status` values, which is exactly what misled the original protocol
+  testing into believing status flowed through it; live, a status change
+  reaches a global-only subscriber never, and the UI degrades to the 300 s
+  resync. Kelpie therefore snapshots first, subscribes
+  `pane.agent_status_changed` for every known pane, and tears down and
+  rebuilds the event connection whenever the pane set changes — see
+  `SubscriptionPlan` in `KelpieCore`. Note the delivered `event` field for
+  per-pane subscription events is the **dotted** form
+  (`pane.agent_status_changed`), unlike the underscored global events.
 - **Walking the process tree to find the hosting terminal must read
   `PROC_PIDT_SHORTBSDINFO`, not the full `PROC_PIDTBSDINFO`.** The full struct
   returns `EPERM` for the setuid-root `/usr/bin/login` that sits in a TUI

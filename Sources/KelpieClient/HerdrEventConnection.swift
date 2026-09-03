@@ -9,19 +9,12 @@ public enum EventConnectionError: Error, Equatable {
 
 /// The long-lived subscription channel.
 ///
-/// `pane.agent_status_changed` is deliberately absent: herdr requires a
-/// `pane_id` for it and rejects a global subscription, and `pane.updated`
-/// carries the same status information for every pane.
+/// The subscription list is fixed for the connection's lifetime — herdr has
+/// no way to add or remove subscriptions on an open connection — so a change
+/// to the pane set means building a new connection with a new plan. Which
+/// kinds and panes to subscribe is `SubscriptionPlan`'s decision, not this
+/// type's.
 public actor HerdrEventConnection {
-    public static let subscriptionTypes = [
-        "pane.updated",
-        "pane.created",
-        "pane.closed",
-        "workspace.created",
-        "workspace.updated",
-        "workspace.renamed",
-        "workspace.closed",
-    ]
 
     /// herdr acknowledges `events.subscribe` in single-digit milliseconds over
     /// a local Unix socket, so ten seconds is far beyond any legitimate local
@@ -47,11 +40,15 @@ public actor HerdrEventConnection {
     /// `subscribe()`.
     private var handshakeContinuation: CheckedContinuation<AsyncStream<LiveEvent>, any Error>?
 
+    private let subscriptions: [SubscriptionRequest]
+
     public init(
         transport: any Transport,
+        subscriptions: [SubscriptionRequest] = SubscriptionPlan.subscriptions(paneIDs: []),
         handshakeTimeout: Duration = HerdrEventConnection.defaultHandshakeTimeout
     ) {
         self.transport = transport
+        self.subscriptions = subscriptions
         self.handshakeTimeout = handshakeTimeout
     }
 
@@ -112,7 +109,7 @@ public actor HerdrEventConnection {
         let chunks = transport.chunks()
         try await transport.send(
             Wire.encodeRequest(id: "kelpie-sub", method: "events.subscribe",
-                               params: SubscribeParams(types: Self.subscriptionTypes))
+                               params: SubscribeParams(requests: subscriptions))
         )
 
         let (stream, continuation) = AsyncStream<LiveEvent>.makeStream()

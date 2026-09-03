@@ -34,3 +34,18 @@ left out rather than an oversight.
   than reacting immediately. Low priority since the setting rarely changes
   while Kelpie is running, but worth fixing if it turns out to matter more in
   practice.
+
+- **Notifications suppressed across a subscription rebuild.** When the pane
+  set changes, the event connection is rebuilt through the reconnect path,
+  which resets `SessionState` and applies the next snapshot as `.bootstrap` —
+  so a pane that turned `blocked` inside that ~1 s window never notifies.
+  Accepted for now because pane lifecycle changes are rare and the window is
+  short; fixing it means carrying state across the rebuild, which reopens the
+  stale-notification questions the reset exists to avoid.
+
+- **A failed live-snapshot refresh waits for the next signal.** If the
+  debounced `session.snapshot` after an event fails (observed once, transiently,
+  while herdr was mid-replay), nothing retries it: the UI stays as it was until
+  the next event or the 300 s resync. A bounded retry would close this, but the
+  failure needs herdr up enough to accept subscriptions while failing requests,
+  which has not been seen outside the replay burst.

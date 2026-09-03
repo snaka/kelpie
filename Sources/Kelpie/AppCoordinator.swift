@@ -2,9 +2,16 @@ import AppKit
 import SwiftUI
 import KelpieCore
 import KelpieClient
+import os
 
 @MainActor
 final class AppCoordinator {
+    /// Debug-level breadcrumbs at every stage boundary (connect, event,
+    /// snapshot, render). Invisible in normal use; surfaced with
+    /// `log stream --predicate 'subsystem == "com.snaka.kelpie"' --level debug`
+    /// when diagnosing a stale menu bar.
+    private static let log = Logger(subsystem: "com.snaka.kelpie", category: "coordinator")
+
     private let menuBar = MenuBarController()
     private let model = PopoverModel()
 
@@ -18,6 +25,13 @@ final class AppCoordinator {
     private var coalescer = RefreshCoalescer()
     private var events: HerdrEventConnection?
     private var eventStream: AsyncStream<LiveEvent>?
+    /// The pane set the live event connection was built for. herdr only
+    /// delivers agent status changes through per-pane subscriptions, so when
+    /// the actual pane set drifts from this, the connection is rebuilt.
+    private var subscribedPaneIDs: Set<String> = []
+    /// Set when the event connection is closed on purpose to pick up a changed
+    /// pane set; the reconnect then skips the disconnected UI and the backoff.
+    private var rebuildRequested = false
 
     private static let resyncInterval: Duration = .seconds(300)
     private static let animationInterval: TimeInterval = 0.1
@@ -52,12 +66,22 @@ final class AppCoordinator {
             do {
                 try await connectOnce()
                 backoff.reset()
+                Self.log.debug("connected; pumping events")
                 await pumpEvents()
+                Self.log.debug("event stream ended")
             } catch {
                 // herdr not running is ordinary, so this is not logged as a
                 // failure — it just schedules the next attempt.
+                Self.log.debug("connect failed: \(String(describing: error), privacy: .public)")
             }
             await teardown()
+            if rebuildRequested {
+                // The stream ended because Kelpie closed it over a pane set
+                // change, not because herdr went away: reconnect immediately
+                // and leave the current menu bar contents up meanwhile.
+                rebuildRequested = false
+                continue
+            }
             model.connection = .disconnected
             refreshUI()
             let delay = backoff.next()
@@ -92,10 +116,19 @@ final class AppCoordinator {
     private func connectOnce() async throws {
         let pong = try await request { try await $0.ping() }
 
+        // Status changes only arrive through per-pane subscriptions (see
+        // SubscriptionPlan), so the pane list has to exist before the
+        // subscription can. This snapshot is only a plan — a second one below
+        // closes the gap. If a planned pane disappears before the subscribe
+        // lands, herdr rejects the whole subscription; that throw falls into
+        // the reconnect loop, which replans from a fresh snapshot.
+        let planning = try await request { try await $0.snapshot() }
+        let plannedPanes = Set(planning.agents.map(\.paneID))
+
         let eventConnection = HerdrEventConnection(
-            transport: UnixSocketTransport(path: UnixSocketTransport.defaultHerdrSocketPath)
+            transport: UnixSocketTransport(path: UnixSocketTransport.defaultHerdrSocketPath),
+            subscriptions: SubscriptionPlan.subscriptions(paneIDs: plannedPanes)
         )
-        // Subscribe before snapshotting so no change slips through the gap.
         let stream = try await eventConnection.subscribe()
 
         // Adopt the subscription immediately, before anything else can throw.
@@ -105,7 +138,10 @@ final class AppCoordinator {
         // herdr stays in that failing state.
         events = eventConnection
         eventStream = stream
+        subscribedPaneIDs = plannedPanes
 
+        // Snapshot again after subscribing so no change slips through the gap
+        // between the planning snapshot and the live subscription.
         let snapshot = try await request { try await $0.snapshot() }
 
         model.connection = pong.protocolVersion == Self.knownProtocol
@@ -123,6 +159,13 @@ final class AppCoordinator {
     /// call site could quietly get wrong.
     private func applySnapshot(_ snapshot: Snapshot, phase: ApplyPhase) {
         let transitions = state.replace(with: snapshot)
+        if events != nil, !rebuildRequested,
+           SubscriptionPlan.needsRebuild(subscribed: subscribedPaneIDs,
+                                         current: Set(state.agents.keys)) {
+            Self.log.debug("pane set changed; rebuilding the event subscription")
+            rebuildRequested = true
+            Task { [events] in await events?.close() }
+        }
         for transition in NotificationPolicy.notifiable(transitions, phase: phase) {
             NotificationManager.shared.postBlocked(
                 workspace: state.label(for: transition.workspaceID),
@@ -141,6 +184,7 @@ final class AppCoordinator {
     private func pumpEvents() async {
         guard let stream = eventStream else { return }
         for await _ in stream {
+            Self.log.debug("event received")
             scheduleRefresh()
         }
     }
@@ -163,7 +207,10 @@ final class AppCoordinator {
     }
 
     private func refreshFromSnapshot() async {
-        guard let snapshot = try? await request({ try await $0.snapshot() }) else { return }
+        guard let snapshot = try? await request({ try await $0.snapshot() }) else {
+            Self.log.debug("live snapshot request failed")
+            return
+        }
         applySnapshot(snapshot, phase: .live)
         coalescer.didRefresh()
     }
@@ -191,6 +238,7 @@ final class AppCoordinator {
         coalescer = RefreshCoalescer()
         eventStream = nil
         await events?.close(); events = nil
+        subscribedPaneIDs = []
         state = SessionState()
     }
 
@@ -204,11 +252,17 @@ final class AppCoordinator {
     }
 
     private func renderMenuBar(counts: StatusCounts) {
-        menuBar.render(MenuBarModel.content(
+        let content = MenuBarModel.content(
             counts: counts,
             tick: tick,
             reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        ))
+        )
+        if case .resting = content {
+            Self.log.debug("render: resting")
+        } else {
+            Self.log.debug("render: b\(counts.blocked) w\(counts.working) d\(counts.done)")
+        }
+        menuBar.render(content)
     }
 
     /// The timer exists only while something is working. This is what keeps

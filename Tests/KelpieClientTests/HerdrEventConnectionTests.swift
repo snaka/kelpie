@@ -14,10 +14,13 @@ struct HerdrEventConnectionTests {
     {"data":{"pane":{"agent":"claude","agent_status":"blocked","pane_id":"w0:p1","revision":9,"tab_id":"w0:t1","terminal_id":"t","terminal_title_stripped":"待ち","workspace_id":"w0"},"type":"pane_updated"},"event":"pane_updated"}
     """#
 
-    @Test("Subscribe sends events.subscribe with the documented type list")
+    @Test("Subscribe sends events.subscribe with the requested subscription plan")
     func subscribeRequest() async throws {
         let transport = FakeTransport(scriptedChunks: [line(ack)])
-        let connection = HerdrEventConnection(transport: transport)
+        let connection = HerdrEventConnection(
+            transport: transport,
+            subscriptions: SubscriptionPlan.subscriptions(paneIDs: ["w0:p1"])
+        )
         _ = try await connection.subscribe()
 
         let sent = try JSONSerialization.jsonObject(
@@ -25,7 +28,9 @@ struct HerdrEventConnectionTests {
         ) as! [String: Any]
         #expect(sent["method"] as? String == "events.subscribe")
         let subs = (sent["params"] as! [String: Any])["subscriptions"] as! [[String: Any]]
-        #expect(subs.map { $0["type"] as! String } == HerdrEventConnection.subscriptionTypes)
+        #expect(subs.map { $0["type"] as! String }
+            == SubscriptionPlan.globalTypes + [SubscriptionPlan.agentStatusType])
+        #expect(subs.last?["pane_id"] as? String == "w0:p1")
     }
 
     @Test("A pane event becomes a change signal after the acknowledgement")
