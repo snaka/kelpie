@@ -22,8 +22,18 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     func requestAuthorization() async -> Bool {
         // Completion-handler form for the same reason as below: Swift 6.1
         // won't send the non-Sendable center into the async overload.
+        //
+        // `@Sendable` is load-bearing: without it, a closure written inside
+        // this `@MainActor` class is inferred MainActor-isolated under the
+        // Swift 6.1 SDKs, and the compiler plants a dispatch_assert_queue
+        // check at its entry. UserNotifications invokes the completion on a
+        // background queue, so that check aborts the process at launch —
+        // observed as `BUG IN CLIENT OF LIBDISPATCH` on the v0.1.0 release
+        // binary. Newer SDKs annotate the parameter themselves, which is why
+        // local builds never crashed. `continuation.resume` is thread-safe,
+        // so no hop back to the main queue is needed.
         await withCheckedContinuation { continuation in
-            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            center.requestAuthorization(options: [.alert, .sound]) { @Sendable granted, _ in
                 continuation.resume(returning: granted)
             }
         }
@@ -32,9 +42,10 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     func authorizationDenied() async -> Bool {
         // `UNNotificationSettings` is not Sendable under Swift 6.1 (CI's
         // Xcode 16.4), so go through the completion-handler API and send
-        // back only the status enum.
+        // back only the status enum. `@Sendable` for the same reason as
+        // above — this callback also arrives on a background queue.
         let status = await withCheckedContinuation { continuation in
-            center.getNotificationSettings { settings in
+            center.getNotificationSettings { @Sendable settings in
                 continuation.resume(returning: settings.authorizationStatus)
             }
         }
