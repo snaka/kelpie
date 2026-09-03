@@ -6,7 +6,6 @@ public enum MenuBarRole: Equatable, Sendable {
     case blocked
     case working
     case done
-    case resting
 }
 
 public struct MenuBarSegment: Equatable, Sendable {
@@ -19,23 +18,31 @@ public struct MenuBarSegment: Equatable, Sendable {
     }
 }
 
+/// What the status item should show. At rest that is an icon, not text: the
+/// app layer draws it as a template image so macOS keeps it legible against
+/// any menu bar background — a dim text glyph was invisible over colourful
+/// wallpapers.
+public enum MenuBarContent: Equatable, Sendable {
+    case resting
+    case segments([MenuBarSegment])
+}
+
 public enum MenuBarModel {
+    public static func content(counts: StatusCounts, tick: Int, reduceMotion: Bool) -> MenuBarContent {
+        guard !counts.isResting else { return .resting }
+        return .segments(segments(counts: counts, tick: tick, reduceMotion: reduceMotion))
+    }
+
     /// Braille frames: every one is the same width, so neighbouring menu bar
     /// items do not shift while the spinner turns.
     public static let spinnerFrames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
     /// Shown instead of the spinner when Reduce Motion is on.
     public static let reducedMotionFrame = "⣿"
-    /// Shown when nothing is blocked, working or done.
-    public static let restingGlyph = "⠿"
 
     private static let blockedGlyph = "◉"
     private static let doneGlyph = "✓"
 
-    public static func segments(counts: StatusCounts, tick: Int, reduceMotion: Bool) -> [MenuBarSegment] {
-        guard !counts.isResting else {
-            return [MenuBarSegment(text: restingGlyph, role: .resting)]
-        }
-
+    private static func segments(counts: StatusCounts, tick: Int, reduceMotion: Bool) -> [MenuBarSegment] {
         var segments: [MenuBarSegment] = []
         if counts.blocked > 0 {
             segments.append(MenuBarSegment(text: "\(blockedGlyph)\(counts.blocked)", role: .blocked))

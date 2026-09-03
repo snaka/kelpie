@@ -6,6 +6,18 @@ final class MenuBarController {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
 
+    /// A template image, not text: macOS composites template images against
+    /// whatever is behind the menu bar, so the resting state stays legible
+    /// over colourful wallpapers where a dim text glyph disappeared.
+    /// `dog.fill` needs macOS 14.4's SF Symbols; older point releases of
+    /// Sonoma fall back to the paw print.
+    private static let restingIcon: NSImage? = {
+        let image = NSImage(systemSymbolName: "dog.fill", accessibilityDescription: "Kelpie")
+            ?? NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Kelpie")
+        image?.isTemplate = true
+        return image
+    }()
+
     func install() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.target = self
@@ -15,15 +27,22 @@ final class MenuBarController {
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 360, height: 320)
 
-        render(segments: MenuBarModel.segments(
-            counts: StatusCounts(blocked: 0, working: 0, done: 0, idle: 0, unknown: 0),
-            tick: 0,
-            reduceMotion: false
-        ))
+        render(.resting)
     }
 
-    func render(segments: [MenuBarSegment]) {
+    func render(_ content: MenuBarContent) {
         guard let button = statusItem?.button else { return }
+        switch content {
+        case .resting:
+            button.image = Self.restingIcon
+            button.attributedTitle = NSAttributedString()
+        case .segments(let segments):
+            button.image = nil
+            button.attributedTitle = title(for: segments)
+        }
+    }
+
+    private func title(for segments: [MenuBarSegment]) -> NSAttributedString {
         let title = NSMutableAttributedString()
         // Monospaced digits stop the item from resizing as counts cross 9→10,
         // which would nudge every menu bar icon to its left.
@@ -43,7 +62,7 @@ final class MenuBarController {
                 ]
             ))
         }
-        button.attributedTitle = title
+        return title
     }
 
     func setPopoverContent(_ viewController: NSViewController) {

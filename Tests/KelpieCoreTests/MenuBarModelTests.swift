@@ -8,22 +8,32 @@ struct MenuBarModelTests {
         StatusCounts(blocked: blocked, working: working, done: done, idle: 0, unknown: 0)
     }
 
-    @Test("All-idle shows a single resting glyph")
-    func resting() {
-        let segments = MenuBarModel.segments(counts: counts(), tick: 0, reduceMotion: false)
-        #expect(segments == [MenuBarSegment(text: MenuBarModel.restingGlyph, role: .resting)])
+    /// Unwraps the segments of an active state; fails the test if the content
+    /// turned out to be `.resting`.
+    private func segments(_ counts: StatusCounts, tick: Int = 0, reduceMotion: Bool = false) -> [MenuBarSegment] {
+        guard case .segments(let segments) = MenuBarModel.content(
+            counts: counts, tick: tick, reduceMotion: reduceMotion
+        ) else {
+            Issue.record("expected .segments for \(counts)")
+            return []
+        }
+        return segments
+    }
+
+    @Test("All-idle renders as the resting icon, not text segments")
+    func restingContent() {
+        let content = MenuBarModel.content(counts: counts(), tick: 0, reduceMotion: false)
+        #expect(content == .resting)
     }
 
     @Test("Zero-count segments are omitted entirely")
     func zeroSegmentsOmitted() {
-        let segments = MenuBarModel.segments(counts: counts(working: 2), tick: 0, reduceMotion: false)
-        #expect(segments.map(\.role) == [.working])
+        #expect(segments(counts(working: 2)).map(\.role) == [.working])
     }
 
     @Test("Segments appear in blocked, working, done order")
     func segmentOrder() {
-        let segments = MenuBarModel.segments(counts: counts(blocked: 1, working: 2, done: 3),
-                                             tick: 0, reduceMotion: false)
+        let segments = segments(counts(blocked: 1, working: 2, done: 3))
         #expect(segments.map(\.role) == [.blocked, .working, .done])
         #expect(segments[0].text == "◉1")
         #expect(segments[2].text == "✓3")
@@ -31,25 +41,23 @@ struct MenuBarModelTests {
 
     @Test("The working segment advances through the spinner frames")
     func spinnerAdvances() {
-        let frames = (0..<8).map {
-            MenuBarModel.segments(counts: counts(working: 1), tick: $0, reduceMotion: false)[0].text
-        }
+        let frames = (0..<8).map { segments(counts(working: 1), tick: $0)[0].text }
         #expect(frames == MenuBarModel.spinnerFrames.map { $0 + "1" })
     }
 
     @Test("The spinner wraps around and tolerates a negative tick")
     func spinnerWraps() {
-        let first = MenuBarModel.segments(counts: counts(working: 1), tick: 0, reduceMotion: false)[0].text
-        let wrapped = MenuBarModel.segments(counts: counts(working: 1), tick: 8, reduceMotion: false)[0].text
-        let negative = MenuBarModel.segments(counts: counts(working: 1), tick: -1, reduceMotion: false)[0].text
+        let first = segments(counts(working: 1), tick: 0)[0].text
+        let wrapped = segments(counts(working: 1), tick: 8)[0].text
+        let negative = segments(counts(working: 1), tick: -1)[0].text
         #expect(first == wrapped)
         #expect(MenuBarModel.spinnerFrames.contains { negative.hasPrefix($0) })
     }
 
     @Test("Reduce Motion pins the working glyph to a static frame")
     func reduceMotion() {
-        let a = MenuBarModel.segments(counts: counts(working: 1), tick: 0, reduceMotion: true)[0].text
-        let b = MenuBarModel.segments(counts: counts(working: 1), tick: 5, reduceMotion: true)[0].text
+        let a = segments(counts(working: 1), reduceMotion: true)[0].text
+        let b = segments(counts(working: 1), tick: 5, reduceMotion: true)[0].text
         #expect(a == MenuBarModel.reducedMotionFrame + "1")
         #expect(a == b)
     }

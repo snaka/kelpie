@@ -204,7 +204,7 @@ final class AppCoordinator {
     }
 
     private func renderMenuBar(counts: StatusCounts) {
-        menuBar.render(segments: MenuBarModel.segments(
+        menuBar.render(MenuBarModel.content(
             counts: counts,
             tick: tick,
             reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion

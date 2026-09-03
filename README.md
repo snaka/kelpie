@@ -38,8 +38,9 @@ count is greater than zero:
 
 Idle and unknown-status agents are not counted in the menu bar — they still
 appear in the popover, but the menu bar is reserved for states that want your
-attention. When nothing is blocked, working, or done, the item shows a single
-muted `⠿` glyph so Kelpie stays visible without competing for attention.
+attention. When nothing is blocked, working, or done, the item shows a small
+dog icon drawn as a template image, so macOS keeps it legible against any menu
+bar background without it competing for attention.
 
 The working segment's spinner only animates while at least one agent is
 working; the animation timer starts and stops with that condition, which is
@@ -86,7 +87,7 @@ window. After installing, launch it from `/Applications/Kelpie.app` (or enable
 
 **herdr must already be running.** Kelpie connects to herdr's socket at
 `~/.config/herdr/herdr.sock` and does nothing to start herdr itself. If herdr
-is not running, the menu bar item shows the muted resting glyph and the
+is not running, the menu bar item shows the resting dog icon and the
 popover footer reports "herdr server not running — retrying"; Kelpie retries
 the connection on an exponential backoff and picks up automatically once
 herdr is available.
@@ -138,7 +139,7 @@ no real effect. This can only be verified once Kelpie is installed to
 - [ ] Menu bar segments match the agent counts shown in the popover.
 - [ ] Popover sections appear in BLOCKED, WORKING, DONE, IDLE order, and an
       empty section (and its heading) is omitted.
-- [ ] Quitting herdr shows the muted resting glyph and "herdr server not
+- [ ] Quitting herdr shows the resting dog icon and "herdr server not
       running — retrying" in the popover footer; restarting herdr recovers
       automatically without restarting Kelpie.
 - [ ] With Reduce Motion enabled in System Settings, the working segment shows
