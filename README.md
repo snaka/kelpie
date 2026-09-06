@@ -184,6 +184,8 @@ no real effect. This can only be verified once Kelpie is installed to
 
 MIT — see [LICENSE](LICENSE).
 
-The app icon incorporates the dog face from
-[Noto Emoji](https://github.com/googlefonts/noto-emoji), © Google, used under
-the [Apache License 2.0](https://github.com/googlefonts/noto-emoji/blob/main/LICENSE).
+The app icon uses "Dog Silhouette" by GangandInfographie, from
+[Openclipart](https://openclipart.org/detail/276049/dog-silhouette), released
+into the public domain under
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/). The artwork ships
+unmodified in `scripts/`; `scripts/make-icon.swift` recolours and composes it.
