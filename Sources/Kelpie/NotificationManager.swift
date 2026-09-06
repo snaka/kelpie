@@ -52,17 +52,30 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         return status == .denied
     }
 
-    /// Posted only for genuine live transitions into `blocked`;
-    /// `NotificationPolicy` has already filtered bootstrap and resync out.
+    /// Posted for a genuine live transition into `blocked`, and again for each
+    /// reminder while the pane stays there. `NotificationPolicy` and
+    /// `BlockedReminder` decide which is which; this only delivers.
+    ///
+    /// The identifier is the pane and deliberately carries no timestamp.
+    /// Reminders say the same thing about the same pane, so each replaces the
+    /// last instead of stacking another identical row in Notification Center —
+    /// with a timestamp in it, an agent left blocked overnight would leave a
+    /// column of duplicates behind.
+    ///
+    /// `.timeSensitive` because an agent waiting on you is exactly that, and
+    /// because the case this feature exists for — someone deep enough in a
+    /// Focus mode to have stopped watching the menu bar — is the one an
+    /// ordinary notification never reaches.
     func postBlocked(workspace: String, title: String?, paneID: String) {
         let content = UNMutableNotificationContent()
         content.title = workspace
         content.body = title ?? "Waiting for input"
         content.sound = .default
+        content.interruptionLevel = .timeSensitive
         content.userInfo = [Self.paneIDKey: paneID]
 
         center.add(UNNotificationRequest(
-            identifier: "blocked-\(paneID)-\(Date().timeIntervalSince1970)",
+            identifier: "blocked-\(paneID)",
             content: content,
             trigger: nil
         ))

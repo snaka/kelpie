@@ -83,6 +83,13 @@ forward, but going to look is not the same as answering. Agents that were
 already blocked when Kelpie launched are never reminded about, for the same
 reason launch itself is silent.
 
+Reminders replace each other rather than stacking: the notification is
+identified by the pane, so Notification Center keeps one row per blocked agent
+however long it has been waiting. They are sent as Time Sensitive, so a Focus
+mode that would otherwise hold them back lets them through — someone deep
+enough in Focus to have stopped watching the menu bar is exactly who this is
+for.
+
 herdr can also deliver its own system notifications. If both are active you
 will see duplicates, so adjust herdr's `ui.toast.delivery` setting to avoid
 that — either disable herdr's own toast delivery, or keep only one of the two
@@ -138,6 +145,10 @@ notifications worth reading:
 - [ ] Answer the blocked agent and confirm the reminders stop.
 - [ ] With an agent already blocked before Kelpie launches, confirm **no**
       reminder fires for it either.
+- [ ] With a Focus mode active, confirm a reminder still breaks through as a
+      banner rather than going straight to Notification Center.
+- [ ] After several reminders for one agent, confirm Notification Center holds
+      a single row for it rather than one row per reminder.
 
 ### 2. Start at login
 
