@@ -21,11 +21,13 @@ its reasoning. The original design doc is
 - **`KelpieCore`** — pure logic, no I/O, no AppKit, no `Foundation` socket or
   notification types. `AgentStatus`, `AgentRecord`, `SessionState` (the
   authoritative reducer), `StatusCounts`, `AgentGrouping`, `MenuBarModel`,
-  `NotificationPolicy`. Every behavioral rule Kelpie depends on — bootstrap is
-  silent, a live transition into `blocked` notifies exactly once, staying
-  blocked does not re-fire, and a burst of change signals coalesces into one
-  refresh without starving — lives here and is testable with `swift test` and
-  no running herdr. New decision logic belongs here, not in the app layer.
+  `NotificationPolicy`, `BlockedReminder`. Every behavioral rule Kelpie depends
+  on — bootstrap is silent, a live transition into `blocked` notifies exactly
+  once, no ordinary update re-fires it, a pane left blocked is reminded about
+  on a widening 1/5/15-minute schedule (and one blocked before launch never
+  is), and a burst of change signals coalesces into one refresh without
+  starving — lives here and is testable with `swift test` and no running
+  herdr. New decision logic belongs here, not in the app layer.
 - **`KelpieClient`** — the herdr socket client: `UnixSocketTransport`,
   `NDJSONFramer`, `Wire` request/response encode-decode, `HerdrRequestConnection`
   (short-lived, one call), `HerdrEventConnection` (long-lived subscription),

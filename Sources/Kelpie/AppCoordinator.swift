@@ -22,7 +22,11 @@ final class AppCoordinator {
     private var connectionTask: Task<Void, Never>?
     private var resyncTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    private var reminderTask: Task<Void, Never>?
     private var coalescer = RefreshCoalescer()
+    /// Re-notifies for panes left sitting in `blocked`. `NotificationPolicy`
+    /// covers the first banner; this covers the ones nobody answered.
+    private var reminder = BlockedReminder()
     private var events: HerdrEventConnection?
     private var eventStream: AsyncStream<LiveEvent>?
     /// The pane set the live event connection was built for. herdr only
@@ -166,14 +170,54 @@ final class AppCoordinator {
             rebuildRequested = true
             Task { [events] in await events?.close() }
         }
-        for transition in NotificationPolicy.notifiable(transitions, phase: phase) {
+        let notifiable = NotificationPolicy.notifiable(transitions, phase: phase)
+        for transition in notifiable {
             NotificationManager.shared.postBlocked(
                 workspace: state.label(for: transition.workspaceID),
                 title: transition.title,
                 paneID: transition.paneID
             )
         }
+        // Sweep before arming: a pane can leave `blocked` — or vanish from the
+        // session entirely — without any transition for it reaching this far.
+        reminder.retain(blocked: Set(state.agentPanes.filter { $0.status == .blocked }.map(\.paneID)))
+        reminder.arm(notifiable, at: ContinuousClock.now)
+        scheduleReminder()
         refreshUI()
+    }
+
+    /// Like the animation timer, this exists only while there is something to
+    /// fire for: with nothing blocked there is no deadline and no task at all.
+    private func scheduleReminder() {
+        reminderTask?.cancel()
+        guard let deadline = reminder.nextDeadline else {
+            reminderTask = nil
+            return
+        }
+        reminderTask = Task { [weak self] in
+            try? await Task.sleep(until: deadline, clock: ContinuousClock())
+            guard !Task.isCancelled, let self else { return }
+            self.fireDueReminders()
+        }
+    }
+
+    /// Reads the title from the current snapshot rather than replaying the one
+    /// captured when the pane blocked, which is minutes stale by the time a
+    /// later reminder fires.
+    private func fireDueReminders() {
+        let due = reminder.due(at: ContinuousClock.now)
+        if !due.isEmpty {
+            Self.log.debug("reminding \(due.count) blocked pane(s)")
+        }
+        for paneID in due {
+            guard let record = state.agents[paneID] else { continue }
+            NotificationManager.shared.postBlocked(
+                workspace: state.label(for: record.workspaceID),
+                title: record.title,
+                paneID: paneID
+            )
+        }
+        scheduleReminder()
     }
 
     /// Events say *that* something changed; the snapshot says *what to*. herdr's
@@ -235,6 +279,8 @@ final class AppCoordinator {
     private func teardown() async {
         resyncTask?.cancel(); resyncTask = nil
         refreshTask?.cancel(); refreshTask = nil
+        reminderTask?.cancel(); reminderTask = nil
+        reminder = BlockedReminder()
         coalescer = RefreshCoalescer()
         eventStream = nil
         await events?.close(); events = nil
