@@ -1,22 +1,35 @@
 import AppKit
 
-// Compose the Kelpie app icon: macOS-style rounded rect + Noto Emoji dog.
+// Compose the Kelpie app icon: macOS-style rounded rect + a dog silhouette.
 //
-// U+1F415 (the whole dog) rather than U+1F436 (the dog face): a kelpie is a
-// working dog, and the standing figure reads as one where a cropped face does
-// not. 0.66 is as large as it goes before the ears crowd the rounded rect.
+// Run it from the repository root:
 //
-// Source artwork (Apache 2.0, © Google):
-//   curl -sfLO https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f415.png
-// Run `swift scripts/make-icon.swift` next to the downloaded PNG, then copy
-// out/icon_*.png into Sources/Kelpie/Assets.xcassets/AppIcon.appiconset/.
-let srcPath = "emoji_u1f415.png"
-let outDir = "out"
+//   swift scripts/make-icon.swift
+//
+// It writes all seven sizes straight into the asset catalogue, so there is
+// nothing to copy afterwards and the committed icons are always exactly what
+// this script produces.
+//
+// Source artwork: "Dog Silhouette" by GangandInfographie, from Openclipart
+// (https://openclipart.org/detail/276049/dog-silhouette), released into the
+// public domain under CC0. It ships in this repository — unlike the Noto Emoji
+// dog it replaces, CC0 carries no redistribution condition to reconcile with
+// Kelpie's MIT licence.
+//
+// The artwork is pure black; it is recoloured here through its own alpha
+// rather than being edited, so the file on disk stays byte-identical to what
+// Openclipart publishes and the colour is one line to change.
+let srcPath = "scripts/dog-silhouette.png"
+let outDir = "Sources/Kelpie/Assets.xcassets/AppIcon.appiconset"
 
-guard let emoji = NSImage(contentsOfFile: srcPath) else {
-    fatalError("cannot load \(srcPath)")
+/// How much of the canvas the dog occupies. 0.86 crowds the rounded rect and
+/// 0.70 leaves it looking lost; 0.78 sits where the emoji used to.
+let artworkScale: CGFloat = 0.78
+let artworkColor = NSColor(calibratedRed: 0.227, green: 0.137, blue: 0.090, alpha: 1) // #3A2317
+
+guard let art = NSImage(contentsOfFile: srcPath) else {
+    fatalError("cannot load \(srcPath) — run this from the repository root")
 }
-try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
 
 func drawIcon(size: Int) -> NSBitmapImageRep {
     let s = CGFloat(size)
@@ -27,6 +40,7 @@ func drawIcon(size: Int) -> NSBitmapImageRep {
     ) else { fatalError("rep") }
     rep.size = NSSize(width: s, height: s)
     NSGraphicsContext.saveGraphicsState()
+    defer { NSGraphicsContext.restoreGraphicsState() }
     guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else { fatalError("ctx") }
     NSGraphicsContext.current = ctx
     ctx.imageInterpolation = .high
@@ -43,11 +57,25 @@ func drawIcon(size: Int) -> NSBitmapImageRep {
     ) else { fatalError("gradient") }
     gradient.draw(in: path, angle: -90)
 
-    let e = s * 0.66
-    let er = NSRect(x: (s - e) / 2, y: (s - e) / 2, width: e, height: e)
-    emoji.draw(in: er, from: .zero, operation: .sourceOver, fraction: 1)
+    // Fit the artwork into a centred box, keeping its aspect ratio, and nudge
+    // it down slightly: the tail reaches higher than the paws drop.
+    let box = s * artworkScale
+    let aspect = art.size.width / art.size.height
+    let w = aspect >= 1 ? box : box * aspect
+    let h = aspect >= 1 ? box / aspect : box
+    let dst = NSRect(x: (s - w) / 2, y: (s - h) / 2 - s * 0.02, width: w, height: h)
 
-    NSGraphicsContext.restoreGraphicsState()
+    // Recolour through the artwork's own alpha: draw it into a scratch image,
+    // flood the colour over only what it covered, then composite that.
+    let tinted = NSImage(size: dst.size)
+    tinted.lockFocus()
+    let local = NSRect(origin: .zero, size: dst.size)
+    art.draw(in: local, from: .zero, operation: .sourceOver, fraction: 1)
+    artworkColor.setFill()
+    local.fill(using: .sourceAtop)
+    tinted.unlockFocus()
+    tinted.draw(in: dst, from: .zero, operation: .sourceOver, fraction: 1)
+
     return rep
 }
 

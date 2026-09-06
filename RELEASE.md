@@ -106,4 +106,6 @@ considering the release verified; they cannot be checked earlier in development.
 - Replace `AC_USERNAME` / `AC_PASSWORD` with an App Store Connect API key for
   `notarytool` (`--key` / `--key-id` / `--issuer`) once the project is mature.
 - Consider an original drawn icon before a v1.0 release — the current icon
-  composes the Noto Emoji dog face (Apache 2.0) onto a green rounded rect.
+  composes a CC0 dog silhouette from Openclipart onto a green rounded rect.
+  Regenerate it with `swift scripts/make-icon.swift` from the repository root;
+  it writes all seven sizes into the asset catalogue directly.
