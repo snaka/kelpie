@@ -65,10 +65,23 @@ into** `blocked` from some other status. It does not notify:
 - on launch, for agents that are already blocked when Kelpie starts up
 - on reconnect, after herdr restarts or the connection drops and recovers
 - on the periodic 5-minute resync, for agents that were already blocked
-- again, for an agent that stays blocked across further updates
+- on any further update, for an agent that simply stays blocked
 
 This keeps notifications rare enough to be worth reading — you get exactly one
 per genuine "an agent now needs you" event.
+
+### Reminders
+
+An agent still blocked some time later was never dealt with, so the one banner
+it got did not do its job. Kelpie reminds you about it a minute after it
+blocked, then five minutes later, then every fifteen for as long as it stays
+blocked. The widening interval keeps a pane you are already walking over to
+from nagging, while one you have forgotten keeps a slow heartbeat going.
+
+Only leaving `blocked` stops the reminders — activating one brings the terminal
+forward, but going to look is not the same as answering. Agents that were
+already blocked when Kelpie launched are never reminded about, for the same
+reason launch itself is silent.
 
 herdr can also deliver its own system notifications. If both are active you
 will see duplicates, so adjust herdr's `ui.toast.delivery` setting to avoid
@@ -117,8 +130,14 @@ notifications worth reading:
       **exactly one** notification fires.
 - [ ] Click the notification and confirm it brings the terminal hosting herdr
       forward, focused on the blocked pane.
-- [ ] Leave the agent blocked past a 5-minute resync and confirm **no**
-      repeat notification fires (resync must be silent).
+- [ ] Leave the agent blocked past a 5-minute resync and confirm the resync
+      itself produces nothing — the only notifications in that window are the
+      reminders below.
+- [ ] Leave an agent blocked and confirm reminders arrive roughly one minute,
+      six minutes and twenty-one minutes after it blocked, then every fifteen.
+- [ ] Answer the blocked agent and confirm the reminders stop.
+- [ ] With an agent already blocked before Kelpie launches, confirm **no**
+      reminder fires for it either.
 
 ### 2. Start at login
 
