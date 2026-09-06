@@ -85,10 +85,17 @@ reason launch itself is silent.
 
 Reminders replace each other rather than stacking: the notification is
 identified by the pane, so Notification Center keeps one row per blocked agent
-however long it has been waiting. They are sent as Time Sensitive, so a Focus
-mode that would otherwise hold them back lets them through — someone deep
-enough in Focus to have stopped watching the menu bar is exactly who this is
-for.
+however long it has been waiting.
+
+**To have reminders reach you during a Focus mode, add Kelpie to that mode's
+allowed apps** — System Settings › Focus › *(your mode)* › Allowed
+Notifications. Kelpie marks these notifications Time Sensitive, which is the
+interruption level a Focus mode passes, but macOS only honours that for apps
+carrying the matching entitlement, which Kelpie does not have. Measured against
+a signed build under the Sleep focus: the notification is delivered and filed,
+but never presented. Without the allow-list entry, reminders during a Focus
+mode go quietly to Notification Center — which is the one situation the feature
+exists to cover, so it is worth setting up.
 
 herdr can also deliver its own system notifications. If both are active you
 will see duplicates, so adjust herdr's `ui.toast.delivery` setting to avoid
@@ -145,8 +152,10 @@ notifications worth reading:
 - [ ] Answer the blocked agent and confirm the reminders stop.
 - [ ] With an agent already blocked before Kelpie launches, confirm **no**
       reminder fires for it either.
-- [ ] With a Focus mode active, confirm a reminder still breaks through as a
-      banner rather than going straight to Notification Center.
+- [ ] With a Focus mode active and Kelpie in that mode's allowed apps, confirm
+      a reminder breaks through rather than going straight to Notification
+      Center. (Without the allow-list entry it will not: Time Sensitive alone
+      does not carry it, as measured on 0.1.4.)
 - [ ] After several reminders for one agent, confirm Notification Center holds
       a single row for it rather than one row per reminder.
 
