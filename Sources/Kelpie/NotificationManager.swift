@@ -61,17 +61,11 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     /// last instead of stacking another identical row in Notification Center —
     /// with a timestamp in it, an agent left blocked overnight would leave a
     /// column of duplicates behind.
-    ///
-    /// `.timeSensitive` because an agent waiting on you is exactly that, and
-    /// because the case this feature exists for — someone deep enough in a
-    /// Focus mode to have stopped watching the menu bar — is the one an
-    /// ordinary notification never reaches.
     func postBlocked(workspace: String, title: String?, paneID: String) {
         let content = UNMutableNotificationContent()
         content.title = workspace
         content.body = title ?? "Waiting for input"
         content.sound = .default
-        content.interruptionLevel = .timeSensitive
         content.userInfo = [Self.paneIDKey: paneID]
 
         center.add(UNNotificationRequest(
