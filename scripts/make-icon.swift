@@ -1,12 +1,16 @@
 import AppKit
 
-// Compose the Kelpie app icon: macOS-style rounded rect + Noto Emoji dog face.
+// Compose the Kelpie app icon: macOS-style rounded rect + Noto Emoji dog.
+//
+// U+1F415 (the whole dog) rather than U+1F436 (the dog face): a kelpie is a
+// working dog, and the standing figure reads as one where a cropped face does
+// not. 0.66 is as large as it goes before the ears crowd the rounded rect.
 //
 // Source artwork (Apache 2.0, © Google):
-//   curl -sfLO https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f436.png
+//   curl -sfLO https://raw.githubusercontent.com/googlefonts/noto-emoji/main/png/512/emoji_u1f415.png
 // Run `swift scripts/make-icon.swift` next to the downloaded PNG, then copy
 // out/icon_*.png into Sources/Kelpie/Assets.xcassets/AppIcon.appiconset/.
-let srcPath = "emoji_u1f436.png"
+let srcPath = "emoji_u1f415.png"
 let outDir = "out"
 
 guard let emoji = NSImage(contentsOfFile: srcPath) else {
