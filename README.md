@@ -32,7 +32,7 @@ count is greater than zero:
 
 | Segment | Meaning |
 |---|---|
-| `◉n` (red) | `n` agents are blocked, waiting on you |
+| `◉n` (red, inverts once ignored) | `n` agents are blocked, waiting on you |
 | `⣾n` (yellow, animated) | `n` agents are working |
 | `✓n` (green) | `n` agents are done |
 
@@ -43,10 +43,27 @@ dog icon drawn as a template image, so macOS keeps it legible against any menu
 bar background without it competing for attention.
 
 The working segment's spinner only animates while at least one agent is
-working; the animation timer starts and stops with that condition, which is
-what keeps the cost independent of pane and client count. When the system's
+working, and the blocked segment only blinks once it has been ignored for a
+minute; the animation timer starts and stops with those two conditions, which
+is what keeps the cost independent of pane and client count. When the system's
 Reduce Motion accessibility setting is on, the spinner is replaced by a static
 glyph instead.
+
+### The blocked segment gets louder
+
+A red count is easy to stop seeing. If nobody answers, the blocked segment
+escalates on its own: plain red for its first minute, then inverted — white on
+a red fill — once a second, and from five minutes on it inverts every 0.4
+seconds. Those two thresholds are the first two reminder intervals below, so
+the item starts blinking as the first re-notify lands and speeds up as the
+second one does.
+
+Answering the agent stops it at once, and a pane that leaves `blocked` and
+comes back starts over from plain red. Unlike the reminders, this does count
+agents that were already blocked when Kelpie launched: a pane blocked before
+launch is exactly the forgotten kind, and an inverting count is not a banner
+that would have been noise. Under Reduce Motion the segment stays inverted
+instead of blinking, so the emphasis survives without the flashing.
 
 ## What clicking a row does
 

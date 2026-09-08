@@ -54,15 +54,24 @@ final class MenuBarController {
             if index > 0 {
                 title.append(NSAttributedString(string: " "))
             }
-            title.append(NSAttributedString(
-                string: segment.text,
-                attributes: [
-                    .font: font,
-                    .foregroundColor: MenuBarPalette.color(for: segment.role),
-                ]
-            ))
+            var attributes: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: MenuBarPalette.foreground(for: segment),
+            ]
+            if let background = MenuBarPalette.background(for: segment) {
+                attributes[.backgroundColor] = background
+            }
+            title.append(NSAttributedString(string: pad(segment), attributes: attributes))
         }
         return title
+    }
+
+    /// Thin spaces so the colour fill of an inverted segment does not sit flush
+    /// against the glyphs. They are added to every blocked segment, blinking or
+    /// not: the padding has to be in both frames, or the status item would
+    /// change width twice a second and nudge every icon to its left.
+    private func pad(_ segment: MenuBarSegment) -> String {
+        segment.role == .blocked ? "\u{2009}\(segment.text)\u{2009}" : segment.text
     }
 
     func setPopoverContent(_ viewController: NSViewController) {
