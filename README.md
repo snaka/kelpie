@@ -28,11 +28,14 @@ looking somewhere else. That is why the app icon is a dog.
 
 ## Why it exists
 
-herdr used to animate its agent spinners and then removed them. The animation
-forced a full redraw for every attached client, so the cost grew with both the
-pane count and the client count. Kelpie brings the animation back from outside
-herdr, where one process redraws a few glyphs in the menu bar and no herdr
-client pays for it.
+herdr used to animate its agent spinners, and then
+[removed them](https://github.com/herdrdev/herdr/commit/81f355fadac7d0d45b077dfc28f9f679add6bbb6)
+in v0.8.0. The animation forced a full redraw for every attached client, so the
+cost grew with both the pane count and the client count — enough that a headless
+server with three clients attached
+[sat at 16-23% of a CPU core](https://github.com/herdrdev/herdr/issues/1862).
+Kelpie brings the animation back from outside herdr, where one process redraws a
+few glyphs in the menu bar and no herdr client pays for it.
 
 ## What the menu bar segments mean
 
