@@ -11,9 +11,9 @@ best-effort macOS notifications on a genuine live transition into `blocked`.
 It talks to herdr over its Unix domain socket at `~/.config/herdr/herdr.sock`
 and performs exactly one write operation: `agent.focus`.
 
-Read [`README.md`](README.md) for the user-facing pitch and the manual
-verification checklist, and [`ROADMAP.md`](ROADMAP.md) for deferred work with
-its reasoning. The original design doc is
+Read [`README.md`](README.md) for the user-facing pitch, [`RELEASE.md`](RELEASE.md)
+for the release runbook and the manual verification checklist, and
+[`ROADMAP.md`](ROADMAP.md) for deferred work with its reasoning. The original design doc is
 `docs/superpowers/specs/2026-08-30-kelpie-design.md`.
 
 ## Architecture — three layers
@@ -141,7 +141,7 @@ herdr.
   `UNErrorDomain Code=1` (`notificationsNotAllowed`), and
   `authorizationStatus` stays `.notDetermined` forever. Notification behavior
   can only be verified against a properly signed, installed build — see the
-  checklist in `README.md`.
+  checklist in `RELEASE.md`.
 - **`SMAppService` refuses to register an app running from a build
   directory.** `SMAppService.mainApp.status` reads `.notFound` and the toggle
   has no real effect until Kelpie is installed to `/Applications`.

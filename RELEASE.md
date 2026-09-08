@@ -74,13 +74,68 @@ The workflow will:
 
 After it succeeds, `brew install --cask snaka/tap/kelpie` should work.
 
-### After the first signed build lands
+## Manual verification
 
-Two checks in [README.md](README.md#manual-verification-checklist) — notification
-delivery/click-to-jump, and Start at login — depend on OS-level state (real code
-signing, a real `/Applications` install) that no ad-hoc-signed development build
-can provide. Perform both against the first signed, installed v0.1.0 build before
-considering the release verified; they cannot be checked earlier in development.
+Kelpie's logic is covered by automated tests (`KelpieCore`/`KelpieClient`), but
+two areas depend on OS-level state that exists only once Kelpie is installed as
+a real, signed app bundle. No ad-hoc-signed development build can exercise
+them, so they cannot be checked earlier in development. Run both against a
+signed, installed build before considering a release verified.
+
+### 1. Notification delivery and click-to-jump
+
+An ad-hoc-signed build launched from `build/` cannot obtain notification
+authorization at all: `requestAuthorization` throws `UNErrorDomain Code=1`
+(`notificationsNotAllowed`), and `authorizationStatus` stays `.notDetermined`
+forever.
+
+The valuable part to check is the *silence* rules, since those are what keep
+notifications worth reading:
+
+- [ ] With an agent already blocked before Kelpie launches, start Kelpie and
+      confirm **no** notification fires (bootstrap must be silent).
+- [ ] With Kelpie already running, drive an agent into `blocked` and confirm
+      **exactly one** notification fires.
+- [ ] Click the notification and confirm it brings the terminal hosting herdr
+      forward, focused on the blocked pane.
+- [ ] Leave the agent blocked past a 5-minute resync and confirm the resync
+      itself produces nothing — the only notifications in that window are the
+      reminders below.
+- [ ] Leave an agent blocked and confirm reminders arrive roughly one minute,
+      six minutes and twenty-one minutes after it blocked, then every fifteen.
+- [ ] Answer the blocked agent and confirm the reminders stop.
+- [ ] With an agent already blocked before Kelpie launches, confirm **no**
+      reminder fires for it either.
+- [ ] With a Focus mode active and Kelpie in that mode's allowed apps, confirm
+      a reminder breaks through rather than going straight to Notification
+      Center. (Without the allow-list entry it will not.)
+- [ ] After several reminders for one agent, confirm Notification Center holds
+      a single row for it rather than one row per reminder.
+
+### 2. Start at login
+
+`SMAppService` refuses to register an app that is running from a build
+directory — `SMAppService.mainApp.status` reads `.notFound` and the toggle has
+no real effect. This can only be verified once Kelpie is installed to
+`/Applications`.
+
+- [ ] Toggle "Start at login" on in the popover footer.
+- [ ] Confirm the registration with:
+      ```bash
+      sfltool dumpbtm | grep -i kelpie
+      ```
+- [ ] Toggle it off and confirm the entry disappears from `sfltool dumpbtm`.
+
+### Other checks worth doing by hand
+
+- [ ] Menu bar segments match the agent counts shown in the popover.
+- [ ] Popover sections appear in BLOCKED, WORKING, DONE, IDLE order, and an
+      empty section (and its heading) is omitted.
+- [ ] Quitting herdr shows the resting dog icon and "herdr server not
+      running — retrying" in the popover footer; restarting herdr recovers
+      automatically without restarting Kelpie.
+- [ ] With Reduce Motion enabled in System Settings, the working segment shows
+      a static glyph instead of the animated spinner.
 
 ## Troubleshooting
 
