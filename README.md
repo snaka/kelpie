@@ -16,7 +16,7 @@ outside herdr itself.
 <a href="ROADMAP.md">Roadmap</a>
 </p>
 
-<img src=".github/assets/menubar.png" width="420" alt="Kelpie's menu bar item showing blocked, working and done counts">
+<img src=".github/assets/menubar.png" width="430" alt="Kelpie's menu bar item showing blocked, working and done counts">
 
 </div>
 
@@ -68,7 +68,7 @@ dog icon drawn as a template image, so macOS keeps it legible against any menu
 bar background without it competing for attention.
 
 <div align="center">
-<img src=".github/assets/popover.png" width="360" alt="The Kelpie popover listing agents grouped by status">
+<img src=".github/assets/popover.png" width="390" alt="The Kelpie popover listing agents grouped by status">
 </div>
 
 The working segment's spinner only animates while at least one agent is
