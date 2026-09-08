@@ -71,6 +71,10 @@ struct AgentListView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                // Every row is a button, so opening the popover would otherwise
+                // ring the first one as if it were selected. Nothing here is
+                // driven by the keyboard — a row is clicked or it is not.
+                .focusEffectDisabled()
             }
         }
     }
