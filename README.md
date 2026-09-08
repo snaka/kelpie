@@ -1,10 +1,35 @@
-# Kelpie
+<div align="center">
 
-<img src="Sources/Kelpie/Assets.xcassets/AppIcon.appiconset/icon_256.png" width="128" alt="Kelpie app icon">
+<img src=".github/assets/icon.png" width="128" alt="Kelpie app icon">
 
-Kelpie is a macOS menu bar app that shows the live state of the coding agents
-running under [herdr](https://github.com/herdrdev/herdr), animated, from
+<h1>Kelpie</h1>
+
+<p>
+A macOS menu bar app that shows the live state of the coding agents running
+under <a href="https://github.com/herdrdev/herdr">herdr</a> — animated, from
 outside herdr itself.
+</p>
+
+<p>
+<a href="#installation">Install</a> ·
+<a href="#why-it-exists">Why it exists</a> ·
+<a href="ROADMAP.md">Roadmap</a>
+</p>
+
+<img src=".github/assets/menubar.png" width="420" alt="Kelpie's menu bar item showing blocked, working and done counts">
+
+</div>
+
+## The name
+
+An Australian Kelpie is a herding dog bred to work stock in the open with
+barely any direction. It keeps the mob in view, notices which animal is about
+to break away, and moves before the handler has said anything. If herdr is the
+tool you use to drive the mob, Kelpie is the dog that keeps watching it while
+you are looking somewhere else.
+
+That is also why the app icon is a dog. The resting silhouette in the menu bar
+is the dog lying down with nothing to report.
 
 ## Why it exists
 
@@ -41,6 +66,10 @@ appear in the popover, but the menu bar is reserved for states that want your
 attention. When nothing is blocked, working, or done, the item shows a small
 dog icon drawn as a template image, so macOS keeps it legible against any menu
 bar background without it competing for attention.
+
+<div align="center">
+<img src=".github/assets/popover.png" width="360" alt="The Kelpie popover listing agents grouped by status">
+</div>
 
 The working segment's spinner only animates while at least one agent is
 working, and the blocked segment only blinks once it has been ignored for a
@@ -205,4 +234,6 @@ The app icon uses "Dog Silhouette" by GangandInfographie, from
 [Openclipart](https://openclipart.org/detail/276049/dog-silhouette), released
 into the public domain under
 [CC0](https://creativecommons.org/publicdomain/zero/1.0/). The artwork ships
-unmodified in `scripts/`; `scripts/make-icon.swift` recolours and composes it.
+unmodified in `scripts/`; `scripts/make-icon.swift` recolours and composes it,
+and `.github/assets/icon.png` is a copy of the generated 256 px icon for use in
+this README.
