@@ -23,10 +23,15 @@ final class AppCoordinator {
     private var resyncTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var reminderTask: Task<Void, Never>?
+    private var emphasisTask: Task<Void, Never>?
     private var coalescer = RefreshCoalescer()
     /// Re-notifies for panes left sitting in `blocked`. `NotificationPolicy`
     /// covers the first banner; this covers the ones nobody answered.
     private var reminder = BlockedReminder()
+    /// Escalates the menu bar's blocked count from static red to an inverting
+    /// one. Deliberately separate from `BlockedReminder`: this one counts every
+    /// blocked pane, including the ones that were already blocked at launch.
+    private var emphasis = BlockedEmphasis()
     private var events: HerdrEventConnection?
     private var eventStream: AsyncStream<LiveEvent>?
     /// The pane set the live event connection was built for. herdr only
@@ -178,11 +183,14 @@ final class AppCoordinator {
                 paneID: transition.paneID
             )
         }
+        let now = ContinuousClock.now
+        let blockedPanes = Set(state.agentPanes.filter { $0.status == .blocked }.map(\.paneID))
         // Sweep before arming: a pane can leave `blocked` — or vanish from the
         // session entirely — without any transition for it reaching this far.
-        reminder.retain(blocked: Set(state.agentPanes.filter { $0.status == .blocked }.map(\.paneID)))
-        reminder.arm(notifiable, at: ContinuousClock.now)
+        reminder.retain(blocked: blockedPanes)
+        reminder.arm(notifiable, at: now)
         scheduleReminder()
+        emphasis.retain(blocked: blockedPanes, at: now)
         refreshUI()
     }
 
@@ -280,7 +288,9 @@ final class AppCoordinator {
         resyncTask?.cancel(); resyncTask = nil
         refreshTask?.cancel(); refreshTask = nil
         reminderTask?.cancel(); reminderTask = nil
+        emphasisTask?.cancel(); emphasisTask = nil
         reminder = BlockedReminder()
+        emphasis = BlockedEmphasis()
         coalescer = RefreshCoalescer()
         eventStream = nil
         await events?.close(); events = nil
@@ -293,36 +303,64 @@ final class AppCoordinator {
     private func refreshUI() {
         model.groups = AgentGrouping.groups(state: state)
         let counts = StatusCounts(state: state)
-        renderMenuBar(counts: counts)
-        syncAnimationTimer(counts: counts)
+        let level = emphasis.level(at: ContinuousClock.now)
+        renderMenuBar(counts: counts, emphasis: level)
+        syncAnimationTimer(counts: counts, emphasis: level)
+        scheduleEmphasis()
     }
 
-    private func renderMenuBar(counts: StatusCounts) {
+    /// The emphasis level rises on a clock nothing else is watching: with a
+    /// pane blocked and no other activity, no snapshot and no animation frame
+    /// is due at the minute mark. This is the single wake that starts the
+    /// blinking — and the reason the timer can stay off until then.
+    private func scheduleEmphasis() {
+        emphasisTask?.cancel()
+        guard let deadline = emphasis.nextDeadline(at: ContinuousClock.now) else {
+            emphasisTask = nil
+            return
+        }
+        emphasisTask = Task { [weak self] in
+            try? await Task.sleep(until: deadline, clock: ContinuousClock())
+            guard !Task.isCancelled, let self else { return }
+            self.refreshUI()
+        }
+    }
+
+    private func renderMenuBar(counts: StatusCounts, emphasis: BlockedEmphasisLevel) {
         let content = MenuBarModel.content(
             counts: counts,
             tick: tick,
-            reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+            emphasis: emphasis
         )
         if case .resting = content {
             Self.log.debug("render: resting")
         } else {
-            Self.log.debug("render: b\(counts.blocked) w\(counts.working) d\(counts.done)")
+            let level = String(describing: emphasis)
+            Self.log.debug(
+                "render: b\(counts.blocked) w\(counts.working) d\(counts.done) e:\(level, privacy: .public)"
+            )
         }
         menuBar.render(content)
     }
 
-    /// The timer exists only while something is working. This is what keeps
-    /// Kelpie's cost independent of agent count and of how many clients are
-    /// attached to herdr.
-    private func syncAnimationTimer(counts: StatusCounts) {
-        let wanted = MenuBarModel.needsAnimation(counts)
+    /// The timer exists only while something is working or a blocked count is
+    /// blinking. This is what keeps Kelpie's cost independent of agent count
+    /// and of how many clients are attached to herdr.
+    private func syncAnimationTimer(counts: StatusCounts, emphasis: BlockedEmphasisLevel) {
+        let wanted = MenuBarModel.needsAnimation(counts, emphasis: emphasis)
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         if wanted, animationTimer == nil {
             let timer = Timer(timeInterval: Self.animationInterval, repeats: true) { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
                     self.tick &+= 1
-                    self.renderMenuBar(counts: StatusCounts(state: self.state))
+                    // The level is re-read every frame, so the step up from
+                    // gentle to insistent takes effect without a snapshot.
+                    self.renderMenuBar(
+                        counts: StatusCounts(state: self.state),
+                        emphasis: self.emphasis.level(at: ContinuousClock.now)
+                    )
                 }
             }
             // `.common`, not the default mode: a timer scheduled in the default
