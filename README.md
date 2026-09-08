@@ -5,9 +5,9 @@
 <h1>Kelpie</h1>
 
 <p>
-A macOS menu bar app that shows the live state of the coding agents running
-under <a href="https://github.com/herdrdev/herdr">herdr</a> — animated, from
-outside herdr itself.
+A macOS menu bar app that shows how your
+<a href="https://github.com/herdrdev/herdr">herdr</a> coding agents are doing:
+how many are blocked, how many are working, how many are done.
 </p>
 
 <p>
@@ -22,128 +22,112 @@ outside herdr itself.
 
 ## The name
 
-An Australian Kelpie is a herding dog bred to work stock in the open with
-barely any direction. It keeps the mob in view, notices which animal is about
-to break away, and moves before the handler has said anything. If herdr is the
-tool you use to drive the mob, Kelpie is the dog that keeps watching it while
-you are looking somewhere else.
-
-That is also why the app icon is a dog. The resting silhouette in the menu bar
-is the dog lying down with nothing to report.
+An Australian Kelpie is a herding dog. It watches the flock on its own, without
+waiting to be told. herdr drives the flock; Kelpie watches it while you are
+looking somewhere else. That is why the app icon is a dog.
 
 ## Why it exists
 
-herdr removed its animated agent spinners in commit `81f355fa` (released in
-v0.8.0) for measured reasons, not a stylistic call. herdrdev/herdr#1862
-recorded the headless server sustaining 16–23% of a CPU core with three
-attached clients and two working panes: a single working pane armed a 128 ms
-animation tick that forced a full render *per attached client*, so the cost
-multiplied by both pane count and client count. herdrdev/herdr#967 recorded a
-second symptom of the same root cause — the focused pane's cursor flickering
-in lockstep with the sidebar spinner. herdr now conveys agent state with
-static marks and color, which is correct for herdr's own rendering path.
-
-Kelpie restores the animated cue from outside herdr, where the cost profile is
-completely different: it is one process rewriting a few glyphs in the menu
-bar, on a timer that only runs while something is actually working. That cost
-does not multiply by pane count, and it does not multiply by how many herdr
-clients are attached — because Kelpie isn't one of the things a herdr render
-has to serve.
+herdr used to animate its agent spinners and then removed them. The animation
+forced a full redraw for every attached client, so the cost grew with both the
+pane count and the client count. Kelpie brings the animation back from outside
+herdr, where one process redraws a few glyphs in the menu bar and no herdr
+client pays for it.
 
 ## What the menu bar segments mean
 
-The menu bar item shows up to three segments, each present only when its
-count is greater than zero:
+The menu bar item shows up to three segments. A segment appears only when its
+count is above zero.
 
 | Segment | Meaning |
 |---|---|
-| `◉n` (red, inverts once ignored) | `n` agents are blocked, waiting on you |
+| `◉n` (red, blinks once ignored) | `n` agents are blocked, waiting on you |
 | `⣾n` (yellow, animated) | `n` agents are working |
 | `✓n` (green) | `n` agents are done |
-
-Idle and unknown-status agents are not counted in the menu bar — they still
-appear in the popover, but the menu bar is reserved for states that want your
-attention. When nothing is blocked, working, or done, the item shows a small
-dog icon drawn as a template image, so macOS keeps it legible against any menu
-bar background without it competing for attention.
 
 <div align="center">
 <img src=".github/assets/popover.png" width="390" alt="The Kelpie popover listing agents grouped by status">
 </div>
 
-The working segment's spinner only animates while at least one agent is
-working, and the blocked segment only blinks once it has been ignored for a
-minute; the animation timer starts and stops with those two conditions, which
-is what keeps the cost independent of pane and client count. When the system's
-Reduce Motion accessibility setting is on, the spinner is replaced by a static
-glyph instead.
+Idle agents are not counted in the menu bar. They still appear in the popover.
+The menu bar is reserved for states that want your attention.
+
+When nothing is blocked, working or done, the item shows a small dog icon. It
+is drawn as a template image, so macOS keeps it readable against any menu bar
+background.
+
+The spinner animates only while an agent is working, and the blocked count
+blinks only once it has been ignored. The animation timer runs in those two
+cases and no others, which is what keeps the cost low. If Reduce Motion is
+turned on, the spinner is replaced by a static glyph.
 
 ### The blocked segment gets louder
 
-A red count is easy to stop seeing. If nobody answers, the blocked segment
-escalates on its own: plain red for its first minute, then inverted — white on
-a red fill — once a second, and from five minutes on it inverts every 0.4
-seconds. Those two thresholds are the first two reminder intervals below, so
-the item starts blinking as the first re-notify lands and speeds up as the
-second one does.
+A red number is easy to start ignoring, so it gets louder on its own.
 
-Answering the agent stops it at once, and a pane that leaves `blocked` and
-comes back starts over from plain red. Unlike the reminders, this does count
-agents that were already blocked when Kelpie launched: a pane blocked before
-launch is exactly the forgotten kind, and an inverting count is not a banner
-that would have been noise. Under Reduce Motion the segment stays inverted
-instead of blinking, so the emphasis survives without the flashing.
+- For the first minute it is plain red.
+- After a minute it inverts once a second: white on a red fill.
+- After five minutes it inverts every 0.4 seconds.
+
+Those two thresholds match the first two reminder intervals below. Answering
+the agent stops it at once, and an agent that unblocks and blocks again starts
+over at plain red.
+
+This does count agents that were already blocked when Kelpie launched. A banner
+for those would be noise, but a blinking number is not: an agent blocked before
+launch is exactly the kind that gets forgotten. Under Reduce Motion the segment
+stays inverted instead of blinking.
 
 ## What clicking a row does
 
-Clicking a row in the popover (or activating a Kelpie notification) sends
-herdr's `agent.focus` for that pane, then brings the terminal hosting herdr
-forward, so you land directly on the waiting agent. If no herdr client is
-currently attached, Kelpie still sends the focus request and skips activating
-a window — the correct pane will already be selected the next time you open
+Clicking a row in the popover sends herdr's `agent.focus` for that pane. Kelpie
+then brings the terminal running herdr to the front, so you land on the waiting
+agent. Activating a Kelpie notification does the same thing.
+
+If no herdr client is attached, Kelpie still sends the focus request and skips
+the window. The right pane will already be selected the next time you open
 herdr.
 
 ## Notifications
 
-Kelpie posts a notification only when an agent makes a **live transition
-into** `blocked` from some other status. It does not notify:
+Kelpie notifies you when an agent moves into `blocked` from some other status.
+That is the only case. It does not notify:
 
-- on launch, for agents that are already blocked when Kelpie starts up
-- on reconnect, after herdr restarts or the connection drops and recovers
-- on the periodic 5-minute resync, for agents that were already blocked
-- on any further update, for an agent that simply stays blocked
+- on launch, for agents that are already blocked
+- on reconnect, after herdr restarts or the connection recovers
+- on the 5-minute resync, for agents that were already blocked
+- on any later update, for an agent that simply stays blocked
 
-This keeps notifications rare enough to be worth reading — you get exactly one
-per genuine "an agent now needs you" event.
+So you get one notification per "an agent now needs you" event. That is what
+keeps them worth reading.
 
 ### Reminders
 
-An agent still blocked some time later was never dealt with, so the one banner
-it got did not do its job. Kelpie reminds you about it a minute after it
-blocked, then five minutes later, then every fifteen for as long as it stays
-blocked. The widening interval keeps a pane you are already walking over to
-from nagging, while one you have forgotten keeps a slow heartbeat going.
+An agent still blocked some time later was never dealt with, so its one banner
+did not do its job. Kelpie reminds you a minute after it blocked, then five
+minutes later, then every fifteen minutes for as long as it stays blocked. The
+widening gap keeps a pane you are already walking over to from nagging you,
+while a forgotten one keeps a slow heartbeat going.
 
-Only leaving `blocked` stops the reminders — activating one brings the terminal
+Only leaving `blocked` stops the reminders. Activating one brings the terminal
 forward, but going to look is not the same as answering. Agents that were
 already blocked when Kelpie launched are never reminded about, for the same
 reason launch itself is silent.
 
-Reminders replace each other rather than stacking: the notification is
-identified by the pane, so Notification Center keeps one row per blocked agent
+Reminders replace each other instead of stacking. Each notification is
+identified by its pane, so Notification Center keeps one row per blocked agent
 however long it has been waiting.
 
-**To have reminders reach you during a Focus mode, add Kelpie to that mode's
-allowed apps** — System Settings › Focus › *(your mode)* › Allowed
-Notifications. Without that entry they go quietly to Notification Center, and
-being deep in a Focus mode is the one situation this feature exists to cover,
-so it is worth setting up. See `ROADMAP.md` for why Kelpie cannot get through
-on its own.
+**To get reminders during a Focus mode, add Kelpie to that mode's allowed
+apps** — System Settings › Focus › *(your mode)* › Allowed Notifications.
+Without that entry they go quietly to Notification Center. Being deep in a
+Focus mode is the one situation this feature exists for, so it is worth setting
+up. See [`ROADMAP.md`](ROADMAP.md) for why Kelpie cannot get through on its
+own.
 
-herdr can also deliver its own system notifications. If both are active you
-will see duplicates, so adjust herdr's `ui.toast.delivery` setting to avoid
-that — either disable herdr's own toast delivery, or keep only one of the two
-notifiers active for agent-blocked events.
+herdr can send its own notifications too. If both are on, you see every event
+twice. Change herdr's `ui.toast.delivery` setting so that only one of the two
+notifies you.
 
 ## Installation
 
@@ -151,80 +135,16 @@ notifiers active for agent-blocked events.
 brew install --cask snaka/tap/kelpie
 ```
 
-Kelpie is a menu bar app (`LSUIElement`); it has no Dock icon and no main
-window. After installing, launch it from `/Applications/Kelpie.app` (or enable
-"Start at login" from the popover footer so it comes back automatically).
+Kelpie is a menu bar app (`LSUIElement`). It has no Dock icon and no main
+window. After installing, launch it from `/Applications/Kelpie.app`. You can
+also turn on "Start at login" in the popover footer so it comes back on its
+own.
 
 **herdr must already be running.** Kelpie connects to herdr's socket at
-`~/.config/herdr/herdr.sock` and does nothing to start herdr itself. If herdr
-is not running, the menu bar item shows the resting dog icon and the
-popover footer reports "herdr server not running — retrying"; Kelpie retries
-the connection on an exponential backoff and picks up automatically once
-herdr is available.
-
-## Manual verification checklist
-
-Kelpie's logic is covered by automated tests (`KelpieCore`/`KelpieClient`),
-but two areas depend on OS-level state that only exists once Kelpie is
-installed as a real, signed app bundle — an ad-hoc-signed debug build cannot
-exercise them. Check both after installing a signed build, and before every
-release.
-
-### 1. Notification delivery and click-to-jump
-
-An ad-hoc-signed build launched from `build/` cannot obtain notification
-authorization at all: `requestAuthorization` throws `UNErrorDomain Code=1`
-(`notificationsNotAllowed`), and `authorizationStatus` stays `.notDetermined`
-forever. This can only be verified against the first properly signed,
-installed build.
-
-The valuable part to check is the *silence* rules, since those are what keep
-notifications worth reading:
-
-- [ ] With an agent already blocked before Kelpie launches, start Kelpie and
-      confirm **no** notification fires (bootstrap must be silent).
-- [ ] With Kelpie already running, drive an agent into `blocked` and confirm
-      **exactly one** notification fires.
-- [ ] Click the notification and confirm it brings the terminal hosting herdr
-      forward, focused on the blocked pane.
-- [ ] Leave the agent blocked past a 5-minute resync and confirm the resync
-      itself produces nothing — the only notifications in that window are the
-      reminders below.
-- [ ] Leave an agent blocked and confirm reminders arrive roughly one minute,
-      six minutes and twenty-one minutes after it blocked, then every fifteen.
-- [ ] Answer the blocked agent and confirm the reminders stop.
-- [ ] With an agent already blocked before Kelpie launches, confirm **no**
-      reminder fires for it either.
-- [ ] With a Focus mode active and Kelpie in that mode's allowed apps, confirm
-      a reminder breaks through rather than going straight to Notification
-      Center. (Without the allow-list entry it will not.)
-- [ ] After several reminders for one agent, confirm Notification Center holds
-      a single row for it rather than one row per reminder.
-
-### 2. Start at login
-
-`SMAppService` refuses to register an app that is running from a build
-directory — `SMAppService.mainApp.status` reads `.notFound` and the toggle has
-no real effect. This can only be verified once Kelpie is installed to
-`/Applications`.
-
-- [ ] Toggle "Start at login" on in the popover footer.
-- [ ] Confirm the registration with:
-      ```bash
-      sfltool dumpbtm | grep -i kelpie
-      ```
-- [ ] Toggle it off and confirm the entry disappears from `sfltool dumpbtm`.
-
-### Other checks worth doing by hand
-
-- [ ] Menu bar segments match the agent counts shown in the popover.
-- [ ] Popover sections appear in BLOCKED, WORKING, DONE, IDLE order, and an
-      empty section (and its heading) is omitted.
-- [ ] Quitting herdr shows the resting dog icon and "herdr server not
-      running — retrying" in the popover footer; restarting herdr recovers
-      automatically without restarting Kelpie.
-- [ ] With Reduce Motion enabled in System Settings, the working segment shows
-      a static glyph instead of the animated spinner.
+`~/.config/herdr/herdr.sock` and never starts herdr itself. If herdr is not
+running, the menu bar shows the resting dog icon and the popover footer says
+"herdr server not running — retrying". Kelpie keeps retrying on a widening
+delay and picks up on its own once herdr is back.
 
 ## License
 
@@ -234,6 +154,6 @@ The app icon uses "Dog Silhouette" by GangandInfographie, from
 [Openclipart](https://openclipart.org/detail/276049/dog-silhouette), released
 into the public domain under
 [CC0](https://creativecommons.org/publicdomain/zero/1.0/). The artwork ships
-unmodified in `scripts/`; `scripts/make-icon.swift` recolours and composes it,
-and `.github/assets/icon.png` is a copy of the generated 256 px icon for use in
+unmodified in `scripts/`, and `scripts/make-icon.swift` recolours and composes
+it. `.github/assets/icon.png` is a copy of the generated 256 px icon, used by
 this README.
