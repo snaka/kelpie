@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Kelpie's app icon artwork.
+
+  Adapted from "Dog Silhouette" by GangandInfographie, from Openclipart
+  (https://openclipart.org/detail/276049/dog-silhouette), released into the
+  public domain under CC0.
+
+  Two things differ from the original, both about the hindquarters:
+
+  1. The original carries its tail up and over the back, tip forward of a
+     vertical line through the root, which the Australian Kelpie standard rules
+     out ("under no circumstances should the tail be carried past a vertical
+     line drawn through the root"). The tail here is a SEPARATE closed subpath,
+     wound the same way as the body: a nonzero fill unions the two, so where it
+     crosses the hind leg the overlap fills solid instead of cancelling to a
+     hole, which is what happens when a tail is spliced into the body's own
+     outline.
+
+  2. The original's croup detoured up into that tail. With the tail gone from
+     the outline it left a peak on the rump, so the croup was redrawn as one
+     cubic running from the end of the topline straight to the top of the
+     thigh, its handles along the tangents either side so both joins stay
+     smooth.
+
+  The viewBox is trimmed to the paths so the rasterised PNG has no margin —
+  scripts/make-icon.swift fits the artwork by aspect ratio alone.
+-->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+	 viewBox="21.38 10.42 270.38 206.18" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#010202;}
+</style>
+<path class="st0" d="M261.30,213.70C260.30,213.70 254.30,215.00 251.50,215.50C248.60,216.00 242.10,215.50 242.30,212.70C242.50,209.90 247.50,205.60 248.50,204.40C249.50,203.30 248.50,191.10 247.50,188.80C246.50,186.50 243.20,179.80 237.00,176.50C230.80,173.20 210.70,157.50 207.00,152.70C203.40,147.90 202.50,137.10 185.70,139.90C168.90,142.70 144.90,149.90 136.80,149.70C128.70,149.60 118.50,152.90 115.20,152.40C111.90,151.90 110.60,152.40 109.90,159.60C109.30,166.70 106.80,199.20 105.60,201.90C104.50,204.60 102.50,216.60 100.80,216.60C99.10,216.60 82.30,216.40 83.80,214.40C85.30,212.40 84.70,207.60 88.00,206.20C91.30,204.80 92.30,204.00 92.30,202.00C92.30,200.00 90.10,161.00 89.80,156.20C89.50,151.30 88.00,142.20 84.80,138.50C81.60,134.80 78.30,130.50 75.30,125.50C72.30,120.50 71.50,118.50 72.00,112.80C72.50,107.10 66.30,94.20 65.00,91.60C63.70,89.00 56.10,70.90 54.00,68.80C51.90,66.70 38.60,69.20 32.80,66.10C27.00,63.00 23.40,61.90 22.20,53.60C21.00,45.40 20.60,46.80 24.70,45.80C28.80,44.80 39.40,44.10 40.20,42.80C40.90,41.60 45.80,33.70 50.70,31.20C51.40,30.90 51.80,30.30 52.00,29.60C52.90,26.40 53.40,22.00 53.70,16.70C54.40,2.80 63.50,15.50 67.10,21.20C68.10,22.70 69.00,24.10 69.70,24.70C72.50,27.40 79.70,34.50 80.80,35.60C85.60,40.40 89.50,44.00 92.60,47.90C95.40,51.10 105.80,70.00 113.40,71.40C121.20,72.80 139.10,83.40 167.90,83.30C196.70,83.20 202.90,81.50 205.90,82.00C234.50,86.77 226.57,106.79 229.10,108.40C233.50,111.20 239.00,117.20 239.30,120.70C239.60,124.20 240.30,147.60 242.10,151.40C244.00,155.20 245.00,163.20 248.30,163.20C251.60,163.20 252.40,169.60 253.10,174.40C253.80,179.20 258.50,191.80 260.80,198.00C263.10,204.20 262.30,213.70 261.30,213.70Z M211.13,91.86C214.10,90.08 223.17,91.55 227.01,94.24C230.85,96.93 231.79,103.48 234.18,108.00C236.57,112.53 238.76,117.19 241.34,121.39C243.93,125.59 246.90,129.45 249.69,133.21C252.48,136.97 255.18,140.63 258.09,143.93C260.99,147.23 263.90,150.37 267.14,152.99C270.38,155.61 273.77,157.99 277.53,159.64C281.28,161.29 287.32,161.32 289.68,162.88C292.04,164.44 291.81,167.83 291.69,169.00C291.58,170.17 291.82,170.19 289.00,169.89C286.17,169.59 279.34,168.57 274.74,167.21C270.14,165.84 265.68,164.00 261.38,161.72C257.09,159.44 252.90,156.64 248.97,153.52C245.04,150.39 241.27,146.78 237.78,142.96C234.30,139.13 231.31,134.74 228.05,130.57C224.79,126.40 221.38,122.20 218.24,117.93C215.09,113.65 210.35,109.27 209.16,104.93C207.98,100.58 208.15,93.64 211.13,91.86Z"/>
+</svg>
