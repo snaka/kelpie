@@ -131,3 +131,43 @@ for size in [16, 32, 64, 128, 256, 512, 1024] {
     try data.write(to: URL(fileURLWithPath: "\(outDir)/icon_\(size).png"))
     print("wrote icon_\(size).png")
 }
+
+// The menu bar icon: the same dog, drawn as a template image. macOS composites
+// template images against whatever is behind the menu bar, so only the alpha
+// channel matters — the artwork's own black is never shown, which is what keeps
+// the resting item legible over a light wallpaper and a dark one alike.
+//
+// 15pt tall is 18pt wide at this aspect ratio, which fits the menu bar's budget
+// while leaving the dog readable; the SF Symbol it replaces drew about the same
+// height.
+let menuBarDir = "Sources/Kelpie/Assets.xcassets/MenuBarIcon.imageset"
+let menuBarHeight: CGFloat = 15
+
+func drawMenuBarIcon(scale: Int) -> NSBitmapImageRep {
+    let aspect = art.size.width / art.size.height
+    let h = menuBarHeight * CGFloat(scale)
+    let w = (menuBarHeight * aspect).rounded() * CGFloat(scale)
+    guard let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: Int(w), pixelsHigh: Int(h),
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    ) else { fatalError("rep") }
+    rep.size = NSSize(width: w, height: h)
+    NSGraphicsContext.saveGraphicsState()
+    defer { NSGraphicsContext.restoreGraphicsState() }
+    guard let ctx = NSGraphicsContext(bitmapImageRep: rep) else { fatalError("ctx") }
+    NSGraphicsContext.current = ctx
+    ctx.imageInterpolation = .high
+    // Fitted to the full canvas: the SVG's viewBox is already trimmed to the
+    // artwork, so there is no margin to trim off here.
+    art.draw(in: NSRect(x: 0, y: 0, width: w, height: h), from: .zero,
+             operation: .sourceOver, fraction: 1)
+    return rep
+}
+
+for scale in [1, 2] {
+    let rep = drawMenuBarIcon(scale: scale)
+    guard let data = rep.representation(using: .png, properties: [:]) else { fatalError("png") }
+    try data.write(to: URL(fileURLWithPath: "\(menuBarDir)/menubar_\(scale)x.png"))
+    print("wrote menubar_\(scale)x.png (\(rep.pixelsWide)x\(rep.pixelsHigh))")
+}
