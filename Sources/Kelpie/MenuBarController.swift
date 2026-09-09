@@ -6,15 +6,17 @@ final class MenuBarController {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
 
-    /// A template image, not text: macOS composites template images against
-    /// whatever is behind the menu bar, so the resting state stays legible
-    /// over colourful wallpapers where a dim text glyph disappeared.
-    /// `dog.fill` needs macOS 14.4's SF Symbols; older point releases of
-    /// Sonoma fall back to the paw print.
+    /// The same dog as the app icon, drawn as a template image. macOS
+    /// composites template images against whatever is behind the menu bar, so
+    /// the resting state stays legible over colourful wallpapers where a dim
+    /// text glyph disappeared. It comes from the artwork the app icon is built
+    /// from — `scripts/make-icon.swift` writes both — rather than from an SF
+    /// Symbol, so the two agree; `dog.fill` was a different dog, and needed
+    /// macOS 14.4 besides.
     private static let restingIcon: NSImage? = {
-        let image = NSImage(systemSymbolName: "dog.fill", accessibilityDescription: "Kelpie")
-            ?? NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Kelpie")
+        let image = NSImage(named: "MenuBarIcon")
         image?.isTemplate = true
+        image?.accessibilityDescription = "Kelpie"
         return image
     }()
 
