@@ -153,10 +153,15 @@ delay and picks up on its own once herdr is back.
 
 MIT — see [LICENSE](LICENSE).
 
-The app icon uses "Dog Silhouette" by GangandInfographie, from
+The app icon and the menu bar icon both come from
+`scripts/kelpie-silhouette.svg`, which adapts "Dog Silhouette" by
+GangandInfographie, from
 [Openclipart](https://openclipart.org/detail/276049/dog-silhouette), released
 into the public domain under
-[CC0](https://creativecommons.org/publicdomain/zero/1.0/). The artwork ships
-unmodified in `scripts/`, and `scripts/make-icon.swift` recolours and composes
-it. `.github/assets/icon.png` is a copy of the generated 256 px icon, used by
-this README.
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/). The original carries
+its tail up over the back, which the Australian Kelpie standard rules out, so
+the hindquarters were redrawn: a brushed tail hanging to the hock, and a croup
+that slopes into the thigh rather than peaking where the old tail joined.
+`scripts/make-icon.swift` writes every size from that one file — rasterising it
+needs `brew install librsvg`. `.github/assets/icon.png` is a copy of the
+generated 256 px icon, used by this README.

@@ -10,26 +10,72 @@ import AppKit
 // nothing to copy afterwards and the committed icons are always exactly what
 // this script produces.
 //
-// Source artwork: "Dog Silhouette" by GangandInfographie, from Openclipart
+// Source artwork: `scripts/kelpie-silhouette.svg`, adapted from "Dog
+// Silhouette" by GangandInfographie, from Openclipart
 // (https://openclipart.org/detail/276049/dog-silhouette), released into the
-// public domain under CC0. It ships in this repository — unlike the Noto Emoji
-// dog it replaces, CC0 carries no redistribution condition to reconcile with
-// Kelpie's MIT licence.
+// public domain under CC0. CC0 carries no redistribution condition to
+// reconcile with Kelpie's MIT licence, and it permits the adaptation below.
 //
-// The artwork is pure black; it is recoloured here through its own alpha
-// rather than being edited, so the file on disk stays byte-identical to what
-// Openclipart publishes and the colour is one line to change.
-let srcPath = "scripts/dog-silhouette.png"
+// What was adapted, both about the hindquarters:
+//
+//  1. The original's tail is a thin whip carried up and *over* the back, tip
+//     forward of a vertical line through its root. The Australian Kelpie
+//     standard rules that out — "under no circumstances should the tail be
+//     carried past a vertical line drawn through the root" — and describes one
+//     that hangs in a very slight curve, reaches roughly to the hock, and is
+//     furnished with a good brush. The tail here is a *separate closed
+//     subpath*, wound the same way as the body, so a nonzero fill unions the
+//     two and the stretch where it crosses the hind leg fills solid. Spliced
+//     into the body's own outline, as the original had it, that crossing
+//     cancels to a hole.
+//  2. The original's croup detoured up into that tail, which left a peak on
+//     the rump once the tail was its own shape. It is now one cubic from the
+//     end of the topline to the top of the thigh, its handles along the
+//     tangents either side so both joins stay smooth.
+//
+// Vector rather than raster throughout: the shapes were tuned by dragging the
+// numbers and watching a 16px preview, which is not something masking and
+// repainting a 2040x1746 bitmap would have allowed.
+//
+// Rasterising needs librsvg (`brew install librsvg`); the SVG is the only
+// copy of the artwork in the repository, so there is no second file to keep
+// in step with it.
+//
+// The artwork is pure black; it is recoloured here through its own alpha, so
+// the colour stays one line to change.
+let svgPath = "scripts/kelpie-silhouette.svg"
 let outDir = "Sources/Kelpie/Assets.xcassets/AppIcon.appiconset"
+
+/// The largest the artwork is ever drawn is 1024 * artworkScale, so rendering
+/// it at 2400 leaves the compositor downsampling rather than enlarging.
+let artworkRasterWidth = 2400
 
 /// How much of the canvas the dog occupies. 0.86 crowds the rounded rect and
 /// 0.70 leaves it looking lost; 0.78 sits where the emoji used to.
 let artworkScale: CGFloat = 0.78
 let artworkColor = NSColor(calibratedRed: 0.227, green: 0.137, blue: 0.090, alpha: 1) // #3A2317
 
-guard let art = NSImage(contentsOfFile: srcPath) else {
-    fatalError("cannot load \(srcPath) — run this from the repository root")
+/// The SVG's viewBox is trimmed to the artwork, so what comes back has no
+/// margin and can be fitted by aspect ratio alone.
+func rasterise(_ path: String, width: Int) -> NSImage {
+    let out = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("kelpie-silhouette-\(width).png")
+    let task = Process()
+    task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    task.arguments = ["rsvg-convert", "-w", "\(width)", "-o", out.path, path]
+    do {
+        try task.run()
+    } catch {
+        fatalError("cannot run rsvg-convert — brew install librsvg")
+    }
+    task.waitUntilExit()
+    guard task.terminationStatus == 0, let image = NSImage(contentsOf: out) else {
+        fatalError("rsvg-convert failed on \(path) — run this from the repository root")
+    }
+    return image
 }
+
+let art = rasterise(svgPath, width: artworkRasterWidth)
 
 func drawIcon(size: Int) -> NSBitmapImageRep {
     let s = CGFloat(size)

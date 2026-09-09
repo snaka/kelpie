@@ -161,6 +161,10 @@ no real effect. This can only be verified once Kelpie is installed to
 - Replace `AC_USERNAME` / `AC_PASSWORD` with an App Store Connect API key for
   `notarytool` (`--key` / `--key-id` / `--issuer`) once the project is mature.
 - Consider an original drawn icon before a v1.0 release — the current icon
-  composes a CC0 dog silhouette from Openclipart onto a green rounded rect.
-  Regenerate it with `swift scripts/make-icon.swift` from the repository root;
-  it writes all seven sizes into the asset catalogue directly.
+  composes a CC0 dog silhouette from Openclipart, its hindquarters redrawn to
+  the Australian Kelpie standard, onto a green rounded rect. Regenerate it with
+  `swift scripts/make-icon.swift` from the repository root; it writes all seven
+  app icon sizes and the two menu bar template images into the asset catalogue
+  directly, and needs `brew install librsvg` to rasterise
+  `scripts/kelpie-silhouette.svg`. Copy the new 256 px icon over
+  `.github/assets/icon.png`, which the README embeds.
