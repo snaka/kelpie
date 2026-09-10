@@ -65,11 +65,11 @@ struct NDJSONFramerTests {
     @Test("Multibyte UTF-8 split across a chunk boundary survives")
     func multibyteSplit() {
         var framer = NDJSONFramer()
-        let full = Array(#"{"t":"教材の準備"}"#.utf8)
-        // Cut inside the first Japanese character's byte sequence.
+        let full = Array(#"{"t":"サンプル作業"}"#.utf8)
+        // Cut inside a Japanese character's byte sequence.
         let cut = full.count / 2
         #expect(framer.push(Data(full[..<cut])).isEmpty)
-        #expect(text(framer.push(Data(full[cut...]) + Data("\n".utf8))) == [#"{"t":"教材の準備"}"#])
+        #expect(text(framer.push(Data(full[cut...]) + Data("\n".utf8))) == [#"{"t":"サンプル作業"}"#])
     }
 
     @Test("An empty chunk emits nothing and is harmless")

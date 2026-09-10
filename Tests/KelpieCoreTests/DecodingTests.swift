@@ -5,13 +5,14 @@ import Foundation
 @Suite("Decoding")
 struct DecodingTests {
 
-    /// Captured verbatim from `herdr api snapshot` on herdr 0.8.2.
+    /// Captured from `herdr api snapshot` on herdr 0.8.2. The field shape is
+    /// verbatim; the path and titles are anonymised.
     static let agentJSON = Data(#"""
-    {"agent":"claude","agent_status":"idle","cwd":"/Users/snaka/ghq/github.com/snaka/larning-math","focused":false,"foreground_cwd":"/Users/snaka/ghq/github.com/snaka/larning-math","pane_id":"wX:p1","revision":2,"state_change_seq":9,"tab_id":"wX:t1","terminal_id":"term_65a3e58eee69c1","terminal_title":"✳ 教材の準備","terminal_title_stripped":"教材の準備","workspace_id":"wX"}
+    {"agent":"claude","agent_status":"idle","cwd":"/Users/example/ghq/github.com/example/sample-project","focused":false,"foreground_cwd":"/Users/example/ghq/github.com/example/sample-project","pane_id":"wX:p1","revision":2,"state_change_seq":9,"tab_id":"wX:t1","terminal_id":"term_65a3e58eee69c1","terminal_title":"✳ サンプル作業","terminal_title_stripped":"サンプル作業","workspace_id":"wX"}
     """#.utf8)
 
     static let workspaceJSON = Data(#"""
-    {"active_tab_id":"wX:t1","agent_status":"idle","focused":false,"label":"larning-math","number":1,"pane_count":1,"tab_count":1,"workspace_id":"wX"}
+    {"active_tab_id":"wX:t1","agent_status":"idle","focused":false,"label":"sample-project","number":1,"pane_count":1,"tab_count":1,"workspace_id":"wX"}
     """#.utf8)
 
     @Test("Agent record decodes the fields Kelpie uses and ignores the rest")
@@ -20,7 +21,7 @@ struct DecodingTests {
         #expect(record.paneID == "wX:p1")
         #expect(record.workspaceID == "wX")
         #expect(record.status == .idle)
-        #expect(record.title == "教材の準備")
+        #expect(record.title == "サンプル作業")
         #expect(record.agentKind == "claude")
         #expect(record.isAgentPane)
     }
@@ -38,7 +39,7 @@ struct DecodingTests {
     func workspaceRecord() throws {
         let record = try JSONDecoder().decode(WorkspaceRecord.self, from: Self.workspaceJSON)
         #expect(record.workspaceID == "wX")
-        #expect(record.label == "larning-math")
+        #expect(record.label == "sample-project")
     }
 
     @Test("Snapshot envelope unwraps the nested snapshot object")
@@ -51,7 +52,7 @@ struct DecodingTests {
         #expect(snapshot.agents.count == 1)
         #expect(snapshot.agents[0].paneID == "wX:p1")
         #expect(snapshot.workspaces.count == 1)
-        #expect(snapshot.workspaces[0].label == "larning-math")
+        #expect(snapshot.workspaces[0].label == "sample-project")
     }
 }
 

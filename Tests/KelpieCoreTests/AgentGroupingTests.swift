@@ -9,11 +9,11 @@ struct AgentGroupingTests {
         _ = s.replace(with: Snapshot(
             agents: [
                 AgentRecord(paneID: "wZ:p1", workspaceID: "wZ", status: .blocked,
-                            title: "Google Workspace ドメイン設定", agentKind: "claude"),
+                            title: "ドメイン設定", agentKind: "claude"),
                 AgentRecord(paneID: "w0:p1", workspaceID: "w0", status: .working,
                             title: "Agent状態インジケーター", agentKind: "claude"),
                 AgentRecord(paneID: "wX:p1", workspaceID: "wX", status: .working,
-                            title: "教材の準備", agentKind: "claude"),
+                            title: "サンプル作業", agentKind: "claude"),
                 AgentRecord(paneID: "wY:p1", workspaceID: "wY", status: .done,
                             title: "Split PR #746 review", agentKind: "claude"),
                 AgentRecord(paneID: "wQ:p1", workspaceID: "wQ", status: .idle,
@@ -23,9 +23,9 @@ struct AgentGroupingTests {
             ],
             workspaces: [
                 WorkspaceRecord(workspaceID: "w0", label: "herdr"),
-                WorkspaceRecord(workspaceID: "wX", label: "larning-math"),
+                WorkspaceRecord(workspaceID: "wX", label: "sample-project"),
                 WorkspaceRecord(workspaceID: "wY", label: "split"),
-                WorkspaceRecord(workspaceID: "wZ", label: "googleworkspace"),
+                WorkspaceRecord(workspaceID: "wZ", label: "domain-setup"),
             ],
             protocolVersion: 20
         ))
@@ -42,7 +42,7 @@ struct AgentGroupingTests {
     func rowOrdering() {
         let groups = AgentGrouping.groups(state: makeState())
         let working = groups.first { $0.status == .working }
-        #expect(working?.rows.map(\.workspaceLabel) == ["herdr", "larning-math"])
+        #expect(working?.rows.map(\.workspaceLabel) == ["herdr", "sample-project"])
     }
 
     @Test("Rows carry the workspace label and stripped title")
@@ -51,8 +51,8 @@ struct AgentGroupingTests {
         let blocked = groups.first { $0.status == .blocked }
         #expect(blocked?.rows == [AgentRow(
             paneID: "wZ:p1",
-            workspaceLabel: "googleworkspace",
-            title: "Google Workspace ドメイン設定"
+            workspaceLabel: "domain-setup",
+            title: "ドメイン設定"
         )])
     }
 
