@@ -13,8 +13,12 @@ and performs exactly one write operation: `agent.focus`.
 
 Read [`README.md`](README.md) for the user-facing pitch, [`RELEASE.md`](RELEASE.md)
 for the release runbook and the manual verification checklist, and
-[`ROADMAP.md`](ROADMAP.md) for deferred work with its reasoning. The original design doc is
-`docs/superpowers/specs/2026-08-30-kelpie-design.md`.
+[`ROADMAP.md`](ROADMAP.md) for deferred work with its reasoning.
+
+The original design doc and implementation plan live under `docs/superpowers/`,
+which is deliberately untracked — they are working notes, not published
+documentation. If that directory is absent from your checkout, nothing in this
+file depends on it.
 
 ## Architecture — three layers
 
