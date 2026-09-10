@@ -4,6 +4,13 @@ import KelpieCore
 struct AgentListView: View {
     @ObservedObject var model: PopoverModel
 
+    /// `CFBundleShortVersionString` resolves to `MARKETING_VERSION` from
+    /// `project.yml`, so the version shown here has no second copy to keep in
+    /// sync. A build without the key — a SwiftUI preview, say — falls back to
+    /// a dash rather than showing a wrong number.
+    private static let marketingVersion =
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             banners
@@ -82,6 +89,7 @@ struct AgentListView: View {
     private var footer: some View {
         HStack {
             Text(statusText).font(.caption).foregroundStyle(.secondary)
+            Text("v\(Self.marketingVersion)").font(.caption).foregroundStyle(.tertiary)
             Spacer()
             Toggle("Start at login", isOn: Binding(
                 get: { model.startAtLogin },
