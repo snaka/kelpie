@@ -41,6 +41,9 @@ final class AppCoordinator {
     /// Set when the event connection is closed on purpose to pick up a changed
     /// pane set; the reconnect then skips the disconnected UI and the backoff.
     private var rebuildRequested = false
+    /// Kept so the observer can be identified for the lifetime of the app; the
+    /// coordinator outlives every notification it is registered for.
+    private var reduceMotionObserver: (any NSObjectProtocol)?
 
     private static let resyncInterval: Duration = .seconds(300)
     private static let animationInterval: TimeInterval = 0.1
@@ -64,7 +67,23 @@ final class AppCoordinator {
             model.notificationsDenied = await NotificationManager.shared.authorizationDenied()
         }
 
+        observeReduceMotion()
+
         connectionTask = Task { await runConnectionLoop() }
+    }
+
+    /// Reduce Motion is read fresh on every render, but nothing else wakes the
+    /// menu bar when the setting itself changes: with agents working and no
+    /// state change due, turning it on would otherwise leave the spinner
+    /// running until the next snapshot. This is the wake that stops it.
+    private func observeReduceMotion() {
+        reduceMotionObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.refreshUI() }
+        }
     }
 
     // MARK: - Connection
