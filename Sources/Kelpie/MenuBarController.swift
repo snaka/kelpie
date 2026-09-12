@@ -80,6 +80,15 @@ final class MenuBarController {
         popover.contentViewController = viewController
     }
 
+    /// Dismiss the popover after a click that hands focus to a terminal.
+    /// `.transient` does not cover this on its own: nothing outside the popover
+    /// was clicked, so it would otherwise stay open in front of the window the
+    /// click just activated.
+    func closePopover() {
+        guard popover.isShown else { return }
+        popover.performClose(nil)
+    }
+
     @objc private func toggle(_ sender: NSStatusBarButton) {
         if popover.isShown {
             popover.performClose(sender)

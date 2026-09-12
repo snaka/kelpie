@@ -376,6 +376,9 @@ final class AppCoordinator {
     }
 
     private func jump(to paneID: String) {
+        // Closed before the activation, not after: the popover is in front of
+        // the terminal that is about to come forward.
+        menuBar.closePopover()
         Task {
             try? await request { try await $0.focus(paneID: paneID) }
             await TerminalActivator.activateHerdrHost()
