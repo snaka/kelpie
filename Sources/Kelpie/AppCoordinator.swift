@@ -258,13 +258,28 @@ final class AppCoordinator {
         }
     }
 
+    /// The retry budget is a local, so the event-driven refresh and the resync
+    /// loop — which can be in flight at the same time — never spend each
+    /// other's attempts, and nothing has to be reset on teardown.
     private func refreshFromSnapshot() async {
-        guard let snapshot = try? await request({ try await $0.snapshot() }) else {
-            Self.log.debug("live snapshot request failed")
-            return
+        var retry = SnapshotRetry()
+        while true {
+            if let snapshot = try? await request({ try await $0.snapshot() }) {
+                applySnapshot(snapshot, phase: .live)
+                coalescer.didRefresh()
+                return
+            }
+            guard let delay = retry.nextDelay() else {
+                // Deliberately no `coalescer.didRefresh()`: leaving the window
+                // open is what makes the next event refresh immediately rather
+                // than debounce on top of a UI that is already stale.
+                Self.log.debug("live snapshot request failed; waiting for the next signal")
+                return
+            }
+            Self.log.debug("live snapshot request failed; retrying")
+            try? await Task.sleep(for: delay)
+            if Task.isCancelled { return }
         }
-        applySnapshot(snapshot, phase: .live)
-        coalescer.didRefresh()
     }
 
     /// A Task created inside a `@MainActor` type inherits that isolation, so
