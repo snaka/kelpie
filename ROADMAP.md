@@ -36,17 +36,6 @@ left out rather than an oversight.
   "Start at login" toggle already in the popover footer. Adding a window for
   one boolean would be more surface than the feature deserves.
 
-- **Re-reading Reduce Motion on the OS notification.** `AppCoordinator`
-  currently reads `NSWorkspace.shared.accessibilityDisplayShouldReduceMotion`
-  only inside `refreshUI()`, which runs on state changes (connect, live
-  events, resync) — not in response to
-  `NSWorkspace.accessibilityDisplayOptionsDidChangeNotification`. Toggling
-  Reduce Motion mid-session while agents are working therefore leaves the
-  spinner animating (or static) until the next state change flips it, rather
-  than reacting immediately. Low priority since the setting rarely changes
-  while Kelpie is running, but worth fixing if it turns out to matter more in
-  practice.
-
 - **Notifications suppressed across a subscription rebuild.** When the pane
   set changes, the event connection is rebuilt through the reconnect path,
   which resets `SessionState` and applies the next snapshot as `.bootstrap` —
