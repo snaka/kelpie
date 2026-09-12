@@ -36,10 +36,9 @@ left out rather than an oversight.
   "Start at login" toggle already in the popover footer. Adding a window for
   one boolean would be more surface than the feature deserves.
 
-- **Notifications suppressed across a subscription rebuild.** When the pane
-  set changes, the event connection is rebuilt through the reconnect path,
-  which resets `SessionState` and applies the next snapshot as `.bootstrap` —
-  so a pane that turned `blocked` inside that ~1 s window never notifies.
-  Accepted for now because pane lifecycle changes are rare and the window is
-  short; fixing it means carrying state across the rebuild, which reopens the
-  stale-notification questions the reset exists to avoid.
+- **The popover footer flashes "connecting" during a subscription rebuild.**
+  `runConnectionLoop` sets `.connecting` at the top of every iteration,
+  including the ~400 ms one that only replaces the event connection over a
+  changed pane set. The menu bar contents stay up, so only the footer moves.
+  Cosmetic, and the rebuild is now otherwise invisible — see
+  `ConnectionRestart`.
