@@ -130,6 +130,24 @@ herdr.
   `SubscriptionPlan` in `KelpieCore`. Note the delivered `event` field for
   per-pane subscription events is the **dotted** form
   (`pane.agent_status_changed`), unlike the underscored global events.
+- **`session.snapshot`'s `agents[]` carries only panes with a detected agent,
+  and an agent appearing in a pane produces no event Kelpie subscribes to.** A
+  pane split off with no agent in it never reaches `agents[]`, so it cannot
+  change the pane set or force a subscription rebuild. When an agent is then
+  detected there, no `pane.created` or `pane.updated` follows: Kelpie learns of
+  it only on the next refresh some other pane's status change triggers, or on
+  the 300 s resync. A newly started agent can therefore be missing from the
+  menu bar for minutes.
+- **A `session.snapshot` request in flight fails on essentially every
+  subscription rebuild.** Measured against 0.8.2: within about ten milliseconds
+  of the event connection closing, an outstanding request errors and then
+  succeeds on the first retry. This is why `SnapshotRetry` exists; the failure
+  was originally believed to be a one-off seen during a replay burst.
+- **A second `events.subscribe` on an open subscription connection makes herdr
+  close it.** The first is answered with `subscription_started`; the second
+  draws no error, just a disconnect. Subscriptions are fixed for a connection's
+  lifetime, which is why a changed pane set costs a whole new connection.
+
 - **Walking the process tree to find the hosting terminal must read
   `PROC_PIDT_SHORTBSDINFO`, not the full `PROC_PIDTBSDINFO`.** The full struct
   returns `EPERM` for the setuid-root `/usr/bin/login` that sits in a TUI
