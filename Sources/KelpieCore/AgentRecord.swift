@@ -40,7 +40,13 @@ public struct AgentRecord: Decodable, Equatable, Sendable {
         self.agentKind = agentKind
     }
 
-    /// Panes running a plain shell are reported too; Kelpie only shows panes
-    /// where herdr has detected an agent.
+    /// Kelpie only shows panes where herdr has detected an agent.
+    ///
+    /// Measured against 0.8.2, `session.snapshot`'s `agents[]` already
+    /// excludes plain shells — a pane split off with no agent in it never
+    /// appears — so this filter is currently redundant. It is kept because
+    /// `agent` is declared optional by herdr's own schema, which is the only
+    /// promise Kelpie has; a pane arriving with a null `agent` would otherwise
+    /// be tallied and, if it reported `blocked`, notified for.
     public var isAgentPane: Bool { agentKind != nil }
 }

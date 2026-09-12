@@ -89,10 +89,11 @@ final class AppCoordinator {
     // MARK: - Connection
 
     private func runConnectionLoop() async {
+        var restart = ConnectionRestart.fresh
         while !Task.isCancelled {
             model.connection = .connecting
             do {
-                try await connectOnce()
+                try await connectOnce(restart: restart)
                 backoff.reset()
                 Self.log.debug("connected; pumping events")
                 await pumpEvents()
@@ -102,11 +103,14 @@ final class AppCoordinator {
                 // failure — it just schedules the next attempt.
                 Self.log.debug("connect failed: \(String(describing: error), privacy: .public)")
             }
-            await teardown()
+            // The stream ending because Kelpie closed it over a pane set change
+            // is not a disconnection: herdr never went away, so the next
+            // connection continues this one rather than starting over.
+            restart = rebuildRequested ? .continuation : .fresh
+            await teardown(restart)
             if rebuildRequested {
-                // The stream ended because Kelpie closed it over a pane set
-                // change, not because herdr went away: reconnect immediately
-                // and leave the current menu bar contents up meanwhile.
+                // Reconnect immediately and leave the current menu bar
+                // contents up meanwhile.
                 rebuildRequested = false
                 continue
             }
@@ -141,7 +145,7 @@ final class AppCoordinator {
         }
     }
 
-    private func connectOnce() async throws {
+    private func connectOnce(restart: ConnectionRestart) async throws {
         let pong = try await request { try await $0.ping() }
 
         // Status changes only arrive through per-pane subscriptions (see
@@ -175,10 +179,13 @@ final class AppCoordinator {
         model.connection = pong.protocolVersion == Self.knownProtocol
             ? .connected
             : .protocolMismatch(pong.protocolVersion)
-        // The first snapshot of a connection describes state that already
-        // existed, so it is `.bootstrap` and must not notify. This is the only
-        // place that phase is produced; everything after it is `.live`.
-        applySnapshot(snapshot, phase: .bootstrap)
+        // A first sighting of herdr describes state that already existed, so
+        // it is `.bootstrap` and must not notify. A connection that merely
+        // replaces one Kelpie closed itself is `.live`: the pane set changed
+        // under a herdr that never went away, and a pane that turned `blocked`
+        // in between deserves its banner. `ConnectionRestart` states both
+        // rules; this is the only place either phase is produced.
+        applySnapshot(snapshot, phase: restart.phase)
         startResyncLoop()
     }
 
@@ -195,6 +202,12 @@ final class AppCoordinator {
             Task { [events] in await events?.close() }
         }
         let notifiable = NotificationPolicy.notifiable(transitions, phase: phase)
+        if !notifiable.isEmpty {
+            // The counterpart to `fireDueReminders`' breadcrumb. Without it
+            // there is no way to tell a build that decided to stay silent from
+            // one that tried to notify and was not allowed to.
+            Self.log.debug("notifying \(notifiable.count) pane(s) entering blocked")
+        }
         for transition in notifiable {
             NotificationManager.shared.postBlocked(
                 workspace: state.label(for: transition.workspaceID),
@@ -318,17 +331,23 @@ final class AppCoordinator {
         }
     }
 
-    private func teardown() async {
+    /// The timers are always torn down — the next snapshot reschedules every
+    /// one of them — but what Kelpie *knows* survives a continuation. Clearing
+    /// it there would leave the following snapshot with nothing to diff
+    /// against, which is what used to swallow a notification, and would drop
+    /// the pending reminders for panes that were blocked all along.
+    private func teardown(_ restart: ConnectionRestart) async {
         resyncTask?.cancel(); resyncTask = nil
         refreshTask?.cancel(); refreshTask = nil
         reminderTask?.cancel(); reminderTask = nil
         emphasisTask?.cancel(); emphasisTask = nil
-        reminder = BlockedReminder()
-        emphasis = BlockedEmphasis()
         coalescer = RefreshCoalescer()
         eventStream = nil
         await events?.close(); events = nil
         subscribedPaneIDs = []
+        guard !restart.carriesStateForward else { return }
+        reminder = BlockedReminder()
+        emphasis = BlockedEmphasis()
         state = SessionState()
     }
 

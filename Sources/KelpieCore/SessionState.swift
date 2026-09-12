@@ -20,10 +20,11 @@ public struct SessionState: Equatable, Sendable {
             uniqueKeysWithValues: snapshot.workspaces.map { ($0.workspaceID, $0.label) }
         )
         return snapshot.agents.compactMap { record in
-            // Only panes with a detected agent, matching `agentPanes`. herdr
-            // reports plain shells too, and one of those reporting `blocked`
-            // would otherwise post a notification for a row that appears
-            // nowhere in the counts or the popover.
+            // Only panes with a detected agent, matching `agentPanes`, so a
+            // pane reporting `blocked` without one cannot post a notification
+            // for a row that appears nowhere in the counts or the popover.
+            // See `AgentRecord.isAgentPane` for why this guard is kept even
+            // though 0.8.2 does not put such panes in `agents[]`.
             guard record.isAgentPane else { return nil }
             return transition(from: previous[record.paneID], to: record)
         }
