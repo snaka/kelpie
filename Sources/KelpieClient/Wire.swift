@@ -43,7 +43,11 @@ public struct SubscribeParams: Encodable, Sendable {
 
 public struct PongPayload: Decodable, Sendable {
     public let version: String
-    public let protocolVersion: Int
+    /// herdr's binary client/server protocol, which says nothing about the
+    /// JSON API (see `HerdrCompatibility`). Kept only for diagnostics, and
+    /// optional so a herdr that stops sending it is not mistaken for a broken
+    /// answer.
+    public let protocolVersion: Int?
 
     enum CodingKeys: String, CodingKey {
         case version

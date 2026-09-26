@@ -37,6 +37,7 @@ file depends on it.
 - **`KelpieClient`** — the herdr socket client: `UnixSocketTransport`,
   `NDJSONFramer`, `Wire` request/response encode-decode, `HerdrRequestConnection`
   (short-lived, one call), `HerdrEventConnection` (long-lived subscription),
+  `HerdrCompatibility` (which failures mean the JSON API no longer matches),
   `Backoff`. This is the only layer that breaks if herdr's wire format
   changes — that blast radius is deliberately confined here.
 - **`Kelpie`** (app target) — deliberately thin. `AppCoordinator` owns the
@@ -85,28 +86,53 @@ xcodebuild -project Kelpie.xcodeproj -scheme Kelpie -configuration Debug \
   `~/.config/herdr/herdr.sock`, which is not a TCC-protected location for a
   non-sandboxed process.
 
-## herdr protocol facts (established by live testing against 0.8.2)
+## herdr protocol facts (established by live testing against 0.8.2, re-checked against 0.9.1)
 
-These are not fully discoverable from herdr's own documentation, and two of
+These are not fully discoverable from herdr's own documentation, and some of
 them **contradict** it. Re-verify against a live session with
 `herdr api snapshot`, `herdr api schema --json`, and a raw
 `events.subscribe` session against `~/.config/herdr/herdr.sock` before assuming
 they still hold on a newer
-herdr.
+herdr. Against 0.9.1 (protocol 22) the spent request connection, the rejected
+global `pane.agent_status_changed`, the disconnect on a second
+`events.subscribe`, and the snapshot and status event payloads were re-checked
+and unchanged; the replay was not observed. The other facts below still rest on
+0.8.2.
 
+- **The `protocol` number in `ping` and `session.snapshot` is not a JSON API
+  version.** It versions the binary link between herdr's own client and server,
+  and herdr bumps it for changes no JSON client sees — 21 for explicit
+  workspace group close, 22 for Windows key identity. herdr's own "Protocol
+  stability" docs tell JSON clients to ignore unknown fields and treat
+  unsupported methods as ordinary errors, and the socket exposes no JSON API
+  version (`herdr api schema`'s `schema_version` is CLI-only and still 1).
+  Kelpie therefore never compares the number; it judges compatibility from real
+  failures instead — see `HerdrCompatibility`. Do not reintroduce a
+  known-protocol check: it showed a false "may need an update" banner on every
+  herdr release that touched only its TUI.
+- **A request herdr cannot parse is answered with an empty `id`.** An unknown
+  method or a params object missing a required field draws
+  `{"id":"","error":{"code":"invalid_request",…}}`, because herdr never
+  learned the real id, and then the connection closes. `HerdrRequestConnection`
+  routes an id-less failure to its sole waiter; matching strictly by id would
+  report a wire-format disagreement as herdr having gone away.
 - **A request connection is spent after one answer.** herdr closes it, and a
   second write on the same socket fails with `EPIPE`. `HerdrRequestConnection`
   is therefore built fresh for every single call (`ping`, `session.snapshot`,
   `agent.focus`) — see the doc comment on `HerdrRequestConnection`. A
   **subscription** connection (`HerdrEventConnection`) is the opposite: it
   stays open and streams for the app's whole lifetime.
-- **herdr replays historical events when a subscription opens**, contrary to
-  its own documentation, which states lifecycle subscriptions "do not replay
-  events retained before that point." In practice, subscribing emits a burst
-  of historical events before live events begin, and **that replay does not
+- **herdr 0.8.2 replayed historical events when a subscription opened**,
+  contrary to its own documentation, which states lifecycle subscriptions "do
+  not replay events retained before that point." Subscribing emitted a burst
+  of historical events before live events began, and **that replay did not
   converge to the current state** — it was measured at 16 events over 1.1 s,
-  including panes that no longer exist. This is why events are only a signal
-  that something changed: a debounced `session.snapshot` is the sole authority.
+  including panes that no longer exist. herdr 0.9 fixed this (#3134): against
+  0.9.1, nothing followed `subscription_started` in 1.5 s windows. Events stay
+  only a signal that something changed and a debounced `session.snapshot` stays
+  the sole authority regardless — the event payload still carries no field
+  that could order it against a snapshot (see `revision` below), and an older
+  herdr may still replay.
 - **`revision` cannot order state changes.** herdr increments it in exactly one
   place (`src/terminal/state.rs`), when the *stripped terminal title* changes —
   never on a status change. A stale replay event and the authoritative snapshot

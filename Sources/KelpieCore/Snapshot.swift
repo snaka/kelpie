@@ -1,21 +1,17 @@
 import Foundation
 
 /// The bootstrap payload from `session.snapshot`, reduced to what Kelpie uses.
+///
+/// herdr's numbered `protocol` is deliberately not read: it versions the
+/// binary protocol between herdr's own client and server, not the JSON API,
+/// and herdr bumps it for changes Kelpie never sees.
 public struct Snapshot: Decodable, Equatable, Sendable {
     public let agents: [AgentRecord]
     public let workspaces: [WorkspaceRecord]
-    public let protocolVersion: Int
 
-    enum CodingKeys: String, CodingKey {
-        case agents
-        case workspaces
-        case protocolVersion = "protocol"
-    }
-
-    public init(agents: [AgentRecord], workspaces: [WorkspaceRecord], protocolVersion: Int) {
+    public init(agents: [AgentRecord], workspaces: [WorkspaceRecord]) {
         self.agents = agents
         self.workspaces = workspaces
-        self.protocolVersion = protocolVersion
     }
 }
 

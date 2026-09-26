@@ -10,7 +10,7 @@ struct StatusCountsTests {
             agents: statuses.map { pane, status, kind in
                 AgentRecord(paneID: pane, workspaceID: "w0", status: status, title: nil, agentKind: kind)
             },
-            workspaces: [], protocolVersion: 20
+            workspaces: []
         ))
         return s
     }

@@ -48,7 +48,6 @@ struct DecodingTests {
         {"type":"session_snapshot","snapshot":{"protocol":20,"version":"0.8.2","agents":[\#(String(data: Self.agentJSON, encoding: .utf8)!)],"workspaces":[\#(String(data: Self.workspaceJSON, encoding: .utf8)!)],"panes":[],"tabs":[],"layouts":[]}}
         """#.utf8)
         let snapshot = try SnapshotEnvelope.decode(resultPayload: payload)
-        #expect(snapshot.protocolVersion == 20)
         #expect(snapshot.agents.count == 1)
         #expect(snapshot.agents[0].paneID == "wX:p1")
         #expect(snapshot.workspaces.count == 1)

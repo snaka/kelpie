@@ -26,8 +26,7 @@ struct AgentGroupingTests {
                 WorkspaceRecord(workspaceID: "wX", label: "sample-project"),
                 WorkspaceRecord(workspaceID: "wY", label: "split"),
                 WorkspaceRecord(workspaceID: "wZ", label: "domain-setup"),
-            ],
-            protocolVersion: 20
+            ]
         ))
         return s
     }
@@ -79,8 +78,7 @@ struct AgentGroupingTests {
             ],
             workspaces: [
                 WorkspaceRecord(workspaceID: "w0", label: "workspace"),
-            ],
-            protocolVersion: 20
+            ]
         ))
         return s
     }
