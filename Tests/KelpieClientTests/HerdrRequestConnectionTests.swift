@@ -44,9 +44,47 @@ struct HerdrRequestConnectionTests {
         """))
 
         let result = try await snapshot
-        #expect(result.protocolVersion == 20)
         #expect(result.agents.map(\.paneID) == ["w0:p1"])
         #expect(result.workspaces.map(\.label) == ["herdr"])
+    }
+
+    @Test("A request herdr cannot parse fails with herdr's error, not a lost connection")
+    func unparseableRequest() async throws {
+        let transport = FakeTransport()
+        let connection = HerdrRequestConnection(transport: transport)
+        try await connection.open()
+
+        async let snapshot = connection.snapshot()
+        try await Task.sleep(for: .milliseconds(20))
+        // herdr never learned the id of a request it could not parse, so it
+        // answers with an empty one and then closes the connection.
+        transport.feed(line(#"{"id":"","error":{"code":"invalid_request","message":"invalid request: unknown variant"}}"#))
+        transport.finish()
+
+        // See the note in `errorResponse()` below: do/catch instead of the
+        // `#expect(throws:)` closure form, which can't capture `async let`.
+        do {
+            _ = try await snapshot
+            Issue.record("expected an error")
+        } catch let error as RequestError {
+            #expect(error == .herdr(code: "invalid_request", message: "invalid request: unknown variant"))
+        }
+    }
+
+    @Test("A pong without a protocol number still decodes")
+    func pongWithoutProtocol() async throws {
+        let transport = FakeTransport()
+        let connection = HerdrRequestConnection(transport: transport)
+        try await connection.open()
+
+        async let pong = connection.ping()
+        try await Task.sleep(for: .milliseconds(20))
+        let id = try requestObject(transport.sentLines[0])["id"] as! String
+        transport.feed(line(#"{"id":"\#(id)","result":{"type":"pong","version":"0.9.1"}}"#))
+
+        let result = try await pong
+        #expect(result.version == "0.9.1")
+        #expect(result.protocolVersion == nil)
     }
 
     @Test("Focus sends agent.focus with the pane id as the target")

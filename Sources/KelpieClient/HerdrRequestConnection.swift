@@ -175,6 +175,13 @@ public actor HerdrRequestConnection {
             // a request that never gets an answer fails when the stream ends.
             guard let message = try? Wire.decode(line: line) else { continue }
             switch message {
+            case .failure("", _, _) where waiters.count == 1:
+                // herdr answers a request it could not parse with an empty id,
+                // having never learned the real one. One request per instance
+                // makes the sole waiter its only possible owner — dropping it
+                // would report a wire-format disagreement as a lost connection.
+                let waiter = waiters.removeValue(forKey: waiters.keys.first!)!
+                waiter.resume(returning: message)
             case .result(let id, _), .failure(let id, _, _):
                 if let waiter = waiters.removeValue(forKey: id) {
                     waiter.resume(returning: message)

@@ -36,8 +36,8 @@ struct AgentListView: View {
 
     @ViewBuilder
     private var banners: some View {
-        if case .protocolMismatch(let version) = model.connection {
-            banner("herdr speaks protocol \(version); Kelpie may need an update.")
+        if case .incompatible(let version) = model.connection {
+            banner("Kelpie could not understand herdr\(version.map { " \($0)" } ?? ""); Kelpie may need an update.")
         }
         if model.notificationsDenied {
             banner("Notifications are turned off for Kelpie in System Settings.")
@@ -109,7 +109,7 @@ struct AgentListView: View {
         case .connecting: return "Connecting to herdr…"
         case .connected: return "Connected"
         case .disconnected: return "herdr server not running — retrying"
-        case .protocolMismatch: return "Connected (protocol mismatch)"
+        case .incompatible: return "herdr API not understood — retrying"
         }
     }
 

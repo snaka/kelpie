@@ -136,6 +136,10 @@ no real effect. This can only be verified once Kelpie is installed to
       automatically without restarting Kelpie.
 - [ ] With Reduce Motion enabled in System Settings, the working segment shows
       a static glyph instead of the animated spinner.
+- [ ] Against the newest herdr, the popover footer reads "Connected" with no
+      "Kelpie could not understand herdr" banner. If herdr has moved on since
+      the version named in `CLAUDE.md`'s protocol facts, re-check those facts
+      against it first.
 
 ## Troubleshooting
 

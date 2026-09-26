@@ -6,7 +6,9 @@ enum ConnectionState: Equatable {
     case connecting
     case connected
     case disconnected
-    case protocolMismatch(Int)
+    /// herdr is running but rejected or garbled what Kelpie said to it — see
+    /// `HerdrCompatibility`. Carries herdr's version when a ping got through.
+    case incompatible(herdrVersion: String?)
 }
 
 /// The popover's view model. Owned and mutated by `AppCoordinator`; the view

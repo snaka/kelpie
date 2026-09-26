@@ -21,8 +21,7 @@ struct SessionStateTests {
         var state = SessionState()
         let transitions = state.replace(with: Snapshot(
             agents: [agent("w0:p1", .working)],
-            workspaces: [WorkspaceRecord(workspaceID: "w0", label: "herdr")],
-            protocolVersion: 20
+            workspaces: [WorkspaceRecord(workspaceID: "w0", label: "herdr")]
         ))
         #expect(state.agentPanes.count == 1)
         #expect(state.label(for: "w0") == "herdr")
@@ -35,8 +34,8 @@ struct SessionStateTests {
     func replaceDropsMissingPanes() {
         var state = SessionState()
         _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .idle)],
-                                         workspaces: [], protocolVersion: 20))
-        let transitions = state.replace(with: Snapshot(agents: [], workspaces: [], protocolVersion: 20))
+                                         workspaces: []))
+        let transitions = state.replace(with: Snapshot(agents: [], workspaces: []))
         #expect(state.agentPanes.isEmpty)
         #expect(transitions.isEmpty)
     }
@@ -51,12 +50,12 @@ struct SessionStateTests {
     func replaceReportsStatusChange() {
         var state = SessionState()
         _ = state.replace(with: Snapshot(agents: [agent("w0:p1", .done)],
-                                         workspaces: [], protocolVersion: 20))
+                                         workspaces: []))
         // A status change with no terminal-title change — exactly the shape
         // herdr emits when a done mark clears. herdr's `revision` does not move
         // for it, which is why the snapshot, not any event ordering, decides.
         let transitions = state.replace(with: Snapshot(
-            agents: [agent("w0:p1", .idle)], workspaces: [], protocolVersion: 20
+            agents: [agent("w0:p1", .idle)], workspaces: []
         ))
         #expect(transitions == [StateTransition(
             paneID: "w0:p1", workspaceID: "w0", from: .done, to: .idle, title: "t"
@@ -68,7 +67,7 @@ struct SessionStateTests {
     func replaceReportsNothingWhenUnchanged() {
         var state = SessionState()
         let snapshot = Snapshot(agents: [agent("w0:p1", .working)],
-                                workspaces: [], protocolVersion: 20)
+                                workspaces: [])
         _ = state.replace(with: snapshot)
         #expect(state.replace(with: snapshot).isEmpty)
     }
@@ -78,14 +77,14 @@ struct SessionStateTests {
         var state = SessionState()
         _ = state.replace(with: Snapshot(
             agents: [agent("w0:p2", .idle, title: nil, kind: nil)],
-            workspaces: [], protocolVersion: 20
+            workspaces: []
         ))
         // A plain shell reporting `blocked` is invisible in the counts and in
         // the popover, so a transition for it could only ever produce a
         // notification pointing at a row the user cannot see.
         let transitions = state.replace(with: Snapshot(
             agents: [agent("w0:p2", .blocked, title: nil, kind: nil)],
-            workspaces: [], protocolVersion: 20
+            workspaces: []
         ))
         #expect(transitions.isEmpty)
     }
@@ -96,7 +95,7 @@ struct SessionStateTests {
         _ = state.replace(with: Snapshot(
             agents: [agent("w0:p1", .working),
                      agent("w0:p2", .unknown, title: nil, kind: nil)],
-            workspaces: [], protocolVersion: 20
+            workspaces: []
         ))
         #expect(state.agentPanes.map(\.paneID) == ["w0:p1"])
     }

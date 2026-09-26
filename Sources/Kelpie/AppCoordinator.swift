@@ -41,13 +41,15 @@ final class AppCoordinator {
     /// Set when the event connection is closed on purpose to pick up a changed
     /// pane set; the reconnect then skips the disconnected UI and the backoff.
     private var rebuildRequested = false
+    /// herdr's version from the last ping that got through, named in the
+    /// banner when herdr turns out to speak a JSON API Kelpie cannot follow.
+    private var herdrVersion: String?
     /// Kept so the observer can be identified for the lifetime of the app; the
     /// coordinator outlives every notification it is registered for.
     private var reduceMotionObserver: (any NSObjectProtocol)?
 
     private static let resyncInterval: Duration = .seconds(300)
     private static let animationInterval: TimeInterval = 0.1
-    private static let knownProtocol = 20
 
     func start() {
         menuBar.install()
@@ -92,6 +94,7 @@ final class AppCoordinator {
         var restart = ConnectionRestart.fresh
         while !Task.isCancelled {
             model.connection = .connecting
+            var failure = ConnectionState.disconnected
             do {
                 try await connectOnce(restart: restart)
                 backoff.reset()
@@ -102,6 +105,9 @@ final class AppCoordinator {
                 // herdr not running is ordinary, so this is not logged as a
                 // failure — it just schedules the next attempt.
                 Self.log.debug("connect failed: \(String(describing: error), privacy: .public)")
+                if HerdrCompatibility.isIncompatibility(error) {
+                    failure = .incompatible(herdrVersion: herdrVersion)
+                }
             }
             // The stream ending because Kelpie closed it over a pane set change
             // is not a disconnection: herdr never went away, so the next
@@ -114,7 +120,7 @@ final class AppCoordinator {
                 rebuildRequested = false
                 continue
             }
-            model.connection = .disconnected
+            model.connection = failure
             refreshUI()
             let delay = backoff.next()
             try? await Task.sleep(for: .seconds(delay))
@@ -146,7 +152,12 @@ final class AppCoordinator {
     }
 
     private func connectOnce(restart: ConnectionRestart) async throws {
+        herdrVersion = nil
         let pong = try await request { try await $0.ping() }
+        herdrVersion = pong.version
+        // Logged, never compared: herdr's `protocol` versions its own binary
+        // client/server link, not the JSON API (see `HerdrCompatibility`).
+        Self.log.debug("herdr \(pong.version, privacy: .public), protocol \(pong.protocolVersion.map(String.init) ?? "-", privacy: .public)")
 
         // Status changes only arrive through per-pane subscriptions (see
         // SubscriptionPlan), so the pane list has to exist before the
@@ -176,9 +187,7 @@ final class AppCoordinator {
         // between the planning snapshot and the live subscription.
         let snapshot = try await request { try await $0.snapshot() }
 
-        model.connection = pong.protocolVersion == Self.knownProtocol
-            ? .connected
-            : .protocolMismatch(pong.protocolVersion)
+        model.connection = .connected
         // A first sighting of herdr describes state that already existed, so
         // it is `.bootstrap` and must not notify. A connection that merely
         // replaces one Kelpie closed itself is `.live`: the pane set changed
@@ -296,11 +305,18 @@ final class AppCoordinator {
     private func refreshFromSnapshot() async {
         var retry = SnapshotRetry()
         while true {
-            if let snapshot = try? await request({ try await $0.snapshot() }) {
+            do {
+                let snapshot = try await request { try await $0.snapshot() }
+                if case .incompatible = model.connection { model.connection = .connected }
                 applySnapshot(snapshot, phase: .live)
                 coalescer.didRefresh()
                 return
-            }
+            } catch where HerdrCompatibility.isIncompatibility(error) {
+                // A herdr replaced under a live connection can stop answering
+                // in a shape Kelpie reads; say so rather than show stale state
+                // as if it were current.
+                model.connection = .incompatible(herdrVersion: herdrVersion)
+            } catch {}
             guard let delay = retry.nextDelay() else {
                 // Deliberately no `coalescer.didRefresh()`: leaving the window
                 // open is what makes the next event refresh immediately rather
